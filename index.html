@@ -1,10 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <!-- Chosen Palette: Warm Corporate Neutral & YKBUT Blue -->
-    <!-- Application Structure Plan: Application organized into a single-page dashboard architecture with side navigation dividing operational hubs: Dashboard Analytics, Data Pemesanan (Order Tracking & Filters), Pesanan Baru (Order Creation & Auto-pricing), Katalog Buku (Inventory & Financial Margins with Multi-Delete capabilities), Google Sheets Integration Setup, and Manajemen User (RBAC Authorization). Interactive modal dialogues handle updates, connection configuration, and bulk actions while real-time metrics dynamically compute inventory and sales totals. -->
-    <!-- Visualization & Content Choices: Order Status Breakdown -> Comparative Proportion -> Chart.js Doughnut Chart -> Canvas Rendering with maintainAspectRatio: false -> Allows immediate visual assessment of order fulfillment pipeline -> Chart.js Canvas; Key Performance Indicators -> Summary Numbers -> Styled Tailwind CSS Metric Cards -> Visual clarity for sales, revenue, and units sold -> HTML/CSS; Recent Deliveries -> Geospatial activity list -> Styled list with Unicode icons and tracking numbers -> HTML/CSS. Multi-Select Catalog -> Checkboxes & Dynamic Batch Actions -> Tailwind CSS & JS State array -> Streamlines bulk inventory management. CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YKBUT Press Order Management System</title>
@@ -18,14 +14,13 @@
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-    <!-- Konfigurasi Tema Tailwind YKBUT -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'corp-primary': '#1D4ED8', // Biru Utama UT (Blue-700)
-                        'corp-dark': '#0F172A',    // Slate-900 Sidebar
+                        'corp-primary': '#1D4ED8',
+                        'corp-dark': '#0F172A',
                         'corp-light': '#F8FAFC'
                     },
                     fontFamily: {
@@ -53,6 +48,7 @@
         }
 
         @media print {
+            @page { margin: 0; }
             body * {
                 visibility: hidden;
             }
@@ -63,9 +59,11 @@
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: 100%;
+                width: 80mm !important; /* Ukuran Thermal Printer */
+                padding: 4mm !important;
                 background: white;
                 color: black;
+                margin: 0;
             }
             .print-bg-none { background: none !important; }
         }
@@ -92,14 +90,17 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans h-screen flex overflow-hidden relative">
 
-    <!-- Toast Notification System -->
     <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2 pointer-events-none"></div>
 
-    <!-- Login Screen Overlay -->
     <div id="login-screen" class="fixed inset-0 bg-corp-dark z-50 flex items-center justify-center transition-all duration-500">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative overflow-hidden fade-in">
             <div class="absolute top-0 left-0 w-full h-2 bg-corp-primary"></div>
             <div class="text-center mb-8">
+                <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
+                <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
+                <div class="flex justify-center mb-4">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
                 <p class="text-gray-500 text-sm mt-4">Silakan masuk menggunakan kredensial Anda</p>
@@ -129,17 +130,17 @@
         </div>
     </div>
 
-    <!-- Sidebar -->
     <aside class="w-64 bg-corp-dark text-white flex flex-col shadow-2xl z-20 transition-all duration-300">
-        <!-- Logo / Title -->
-        <div class="h-20 flex items-center justify-center border-b border-gray-800 px-4 pt-2 pb-2">
+        <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
+            <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
+            <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
             </div>
         </div>
 
-        <!-- Navigation Links -->
         <nav class="flex-1 px-4 py-6 space-y-2">
             <button onclick="app.navigate('dashboard')" id="nav-dashboard" class="w-full flex items-center px-4 py-3 bg-corp-primary text-white rounded-lg font-semibold transition-colors">
                 <i class="ph ph-squares-four text-xl mr-3"></i> Dashboard
@@ -158,7 +159,6 @@
             </button>
         </nav>
 
-        <!-- User Profile & Logout -->
         <div class="p-4 border-t border-gray-800 flex justify-between items-center">
             <div class="flex items-center text-sm text-gray-400">
                 <i class="ph ph-user-circle text-2xl mr-2 text-corp-primary"></i>
@@ -173,17 +173,14 @@
         </div>
     </aside>
 
-    <!-- Main Content wrapper -->
     <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <!-- Top Header -->
         <header class="h-20 bg-white border-b-4 border-corp-primary shadow-sm flex items-center justify-between px-8 z-10">
             <div class="flex items-center space-x-4">
-                <h2 class="text-xl font-bold text-gray-800" id="page-title">Dashboard Analitik</h2>
-                <!-- Sync Badge -->
-                <button onclick="app.openSheetConfigModal()" title="Klik untuk Pengaturan Koneksi Spreadsheet" class="cursor-pointer">
+                <h2 class="text-xl font-bold text-gray-800 cursor-pointer hover:text-corp-primary transition" id="page-title" onclick="app.openSheetConfigModal()" title="Klik untuk Pengaturan Koneksi">Dashboard Analitik</h2>
+                <button onclick="app.openSheetConfigModal()" title="Klik untuk Diagnosa & Pengaturan Koneksi Spreadsheet" class="cursor-pointer">
                     <div id="sync-status-badge" class="flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition">
-                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                        <span id="sync-status-text">Google Sheets Sync</span>
+                        <span id="sync-status-dot" class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                        <span id="sync-status-text">Mengecek Koneksi Sheets...</span>
                         <i class="ph ph-gear text-sm ml-1"></i>
                     </div>
                 </button>
@@ -191,7 +188,7 @@
             
             <div class="flex items-center space-x-3">
                 <button onclick="app.openSheetConfigModal()" class="px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-corp-primary rounded-lg flex items-center transition border border-blue-200">
-                    <i class="ph ph-file-spreadsheet text-base mr-1.5"></i> Google Sheets Config
+                    <i class="ph ph-wrench text-base mr-1.5"></i> Setup &amp; Diagnosa Sheets
                 </button>
                 <button onclick="app.syncFromSpreadsheet()" title="Sinkronkan ulang dengan Google Spreadsheet" class="px-3 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition border border-gray-300">
                     <i class="ph ph-arrows-clockwise text-sm mr-1.5" id="sync-icon"></i> Reload Data
@@ -203,35 +200,26 @@
             </div>
         </header>
 
-        <!-- Dynamic Content Area -->
         <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-8" id="app-content">
-            <!-- Content dynamic render via JS -->
         </main>
     </div>
 
-    <!-- Modal Root untuk Popups -->
+    <!-- Modal Root and Print Area -->
     <div id="modal-root"></div>
+    <div id="print-area" class="hidden font-sans"></div>
 
-    <!-- Print Area -->
-    <div id="print-area" class="hidden p-8 font-sans">
-        <!-- Receipt template render JS -->
-    </div>
-
-    <!-- Javascript Application Logic -->
     <script>
-        // Konfigurasi Endpoint Google Sheets & Apps Script
         const SPREADSHEET_CONFIG = {
             TARGET_SHEET_ID: "115m5DYcwSiH6cEOkIBWgdsBG_59a6SPHyWj4V0EZqp8",
-            DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbxSa2noM-2tno2S3X7jNqJ2JOmaDzagRvukG-IIS8buG2_4B4dmht_YBevwDZ9sgWgc/exec"
+            DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbxUz8zf_ZQa23U48EaGLNh9p1b1tVwNp4nmoaTNaBbri50PrYCOwdkBUI0d_UQ8o1Ke/exec"
         };
 
         function getWebAppUrl() {
-            return localStorage.getItem('ykbut_webapp_url') || SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL;
+            return (localStorage.getItem('ykbut_webapp_url') || SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL).trim();
         }
 
-        // Standalone / Fallback Data
         let mockUsers = [
-            { id: 'U001', username: 'admin', password: '123', role: 'Administrator', name: 'Admin Utama' },
+            { id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' },
             { id: 'U002', username: 'staff', password: '123', role: 'Staff Operasional', name: 'Petugas Kasir' }
         ];
 
@@ -248,9 +236,9 @@
 
         let appData = {
             orders: [
-                { id: 'ORD-001', date: '2026-09-10', customerName: 'PT. Andalan Maju', customerPhone: '08123456789', customerEmail: 'info@andalan.co.id', customerAddress: 'Jl. Sudirman No 1, Jakarta Pusat', bookId: 'B001', qty: 10, unitPrice: 150000, totalPrice: 1500000, status: ORDER_STATUS.COMPLETED, paymentStatus: PAYMENT_STATUS.PAID, dpAmount: 1500000, shippingVendor: 'JNE', trackingNumber: 'JNE1234567890' },
-                { id: 'ORD-002', date: '2026-09-11', customerName: 'Budi Santoso', customerPhone: '08987654321', customerEmail: 'budi.s@gmail.com', customerAddress: 'Komp. Harapan Jaya, Bekasi', bookId: 'B003', qty: 2, unitPrice: 90000, totalPrice: 180000, status: ORDER_STATUS.NEW, paymentStatus: PAYMENT_STATUS.UNPAID, dpAmount: 0, shippingVendor: '', trackingNumber: '' },
-                { id: 'ORD-003', date: '2026-09-11', customerName: 'CV. Bangun Konstruksi', customerPhone: '08112233445', customerEmail: 'procurement@bangun.com', customerAddress: 'Kawasan Industri Cikarang Blok C2', bookId: 'B005', qty: 5, unitPrice: 170000, totalPrice: 850000, status: ORDER_STATUS.PROCESSED, paymentStatus: PAYMENT_STATUS.DP, dpAmount: 400000, shippingVendor: '', trackingNumber: '' },
+                { id: 'ORD-001', date: '2026-09-10', customerName: 'PT. Andalan Maju', customerPhone: '08123456789', customerEmail: 'info@andalan.co.id', customerAddress: 'Jl. Sudirman No 1, Jakarta Pusat', bookId: 'B001', qty: 10, unitPrice: 150000, shippingCost: 50000, totalPrice: 1550000, status: ORDER_STATUS.COMPLETED, paymentStatus: PAYMENT_STATUS.PAID, dpAmount: 1550000, shippingVendor: 'JNE', trackingNumber: 'JNE1234567890' },
+                { id: 'ORD-002', date: '2026-09-11', customerName: 'Budi Santoso', customerPhone: '08987654321', customerEmail: 'budi.s@gmail.com', customerAddress: 'Komp. Harapan Jaya, Bekasi', bookId: 'B003', qty: 2, unitPrice: 90000, shippingCost: 0, totalPrice: 180000, status: ORDER_STATUS.NEW, paymentStatus: PAYMENT_STATUS.UNPAID, dpAmount: 0, shippingVendor: '', trackingNumber: '' },
+                { id: 'ORD-003', date: '2026-09-11', customerName: 'CV. Bangun Konstruksi', customerPhone: '08112233445', customerEmail: 'procurement@bangun.com', customerAddress: 'Kawasan Industri Cikarang Blok C2', bookId: 'B005', qty: 5, unitPrice: 170000, shippingCost: 20000, totalPrice: 870000, status: ORDER_STATUS.PROCESSED, paymentStatus: PAYMENT_STATUS.DP, dpAmount: 400000, shippingVendor: '', trackingNumber: '' },
             ]
         };
 
@@ -258,9 +246,8 @@
         let statusChartInstance = null;
         let orderSearchQuery = '';
         let bookSearchQuery = '';
-        let selectedBookIds = []; // Multi-select array for catalog books deletion
+        let selectedBookIds = [];
 
-        // Utilities
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
         const getBook = (id) => mockBooks.find(b => b.id === id);
 
@@ -278,49 +265,43 @@
             }, 3000);
         }
 
-        // API Service Wrapper (Google Apps Script / HTTP Fetch)
         const apiService = {
             async fetchAll() {
                 try {
-                    if (typeof google !== 'undefined' && google.script && google.script.run) {
-                        return new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler((data) => resolve(data))
-                                .withFailureHandler((err) => reject(err))
-                                .getAllData();
-                        });
+                    const targetUrl = getWebAppUrl();
+                    if(!targetUrl || !targetUrl.startsWith('http')) {
+                        return { status: 'unconfigured', message: 'Web App URL belum dikonfigurasi.' };
                     }
 
-                    const targetUrl = getWebAppUrl();
-                    const response = await fetch(`${targetUrl}?action=getAllData`, {
-                        method: 'GET',
-                        redirect: 'follow'
-                    });
+                    const fetchUrl = targetUrl.includes('?') 
+                        ? `${targetUrl}&action=getAllData&_t=${Date.now()}`
+                        : `${targetUrl}?action=getAllData&_t=${Date.now()}`;
 
-                    if (!response.ok) throw new Error('Network error');
+                    const response = await fetch(fetchUrl, { method: 'GET', redirect: 'follow' });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}: Respons server tidak valid`);
                     return await response.json();
                 } catch (error) {
-                    console.warn('Sync server warning, fallback to cached state:', error);
-                    return null;
+                    console.warn('Sync warning:', error);
+                    return { status: 'error', message: error.message || 'Gagal terhubung ke Google Sheets' };
                 }
             },
 
             async sendAction(action, payload) {
                 try {
-                    if (typeof google !== 'undefined' && google.script && google.script.run) {
-                        return new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler((res) => resolve(res))
-                                .withFailureHandler((err) => reject(err))
-                                .executeAction(action, payload);
-                        });
+                    const targetUrl = getWebAppUrl();
+                    if(!targetUrl || !targetUrl.startsWith('http')) {
+                        return { status: 'offline', message: 'URL Google Sheets belum diisi' };
                     }
 
-                    const targetUrl = getWebAppUrl();
-                    const response = await fetch(targetUrl, {
+                    const postUrl = targetUrl.includes('?') 
+                        ? `${targetUrl}&action=${action}` 
+                        : `${targetUrl}?action=${action}`;
+
+                    const response = await fetch(postUrl, {
                         method: 'POST',
                         mode: 'cors',
-                        headers: { 'Content-Type': 'text/plain' },
+                        redirect: 'follow',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                         body: JSON.stringify({ action, data: payload })
                     });
                     
@@ -328,12 +309,11 @@
                     try { return JSON.parse(text); } catch (e) { return { status: 'success', raw: text }; }
                 } catch (error) {
                     console.warn(`Action ${action} result:`, error);
-                    return { status: 'offline', message: 'Tersimpan secara lokal' };
+                    return { status: 'offline', message: 'Tersimpan secara lokal (Gagal koneksi server)' };
                 }
             }
         };
 
-        // Core Application Logic
         const app = {
             currentView: 'dashboard',
             
@@ -365,33 +345,40 @@
 
             async syncFromSpreadsheet() {
                 const badgeText = document.getElementById('sync-status-text');
+                const badgeDot = document.getElementById('sync-status-dot');
                 const badge = document.getElementById('sync-status-badge');
                 const syncIcon = document.getElementById('sync-icon');
 
                 if(syncIcon) syncIcon.classList.add('animate-spin');
-                if(badgeText) badgeText.innerText = "Menghubungkan...";
+                if(badgeText) badgeText.innerText = "Mengecek Koneksi...";
 
                 const serverData = await apiService.fetchAll();
 
                 if(syncIcon) syncIcon.classList.remove('animate-spin');
 
                 if (serverData && serverData.status === 'success') {
-                    if (serverData.orders && serverData.orders.length > 0) appData.orders = serverData.orders;
-                    if (serverData.books && serverData.books.length > 0) mockBooks = serverData.books;
-                    if (serverData.users && serverData.users.length > 0) mockUsers = serverData.users;
+                    if (serverData.orders && Array.isArray(serverData.orders) && serverData.orders.length > 0) appData.orders = serverData.orders;
+                    if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
+                    if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) mockUsers = serverData.users;
 
                     this.saveLocalStorage();
 
                     if(badge) {
                         badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition";
-                        badgeText.innerText = "Google Sheets Connected";
+                        if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-green-500";
+                        if(badgeText) badgeText.innerText = "Terhubung ke Google Sheets";
                     }
-                    showToast('Data berhasil disinkronkan dari Google Sheets', 'success');
+                    showToast('Data berhasil disinkronkan dari Google Sheets!', 'success');
                     this.navigate(this.currentView);
                 } else {
                     if(badge) {
                         badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition";
-                        badgeText.innerText = "Mode Standalone / Offline";
+                        if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
+                        if(badgeText) {
+                            badgeText.innerText = serverData.status === 'unconfigured' 
+                                ? "Belum Terhubung (URL Kosong)" 
+                                : "Belum Terhubung (Klik Diagnosa)";
+                        }
                     }
                 }
             },
@@ -426,7 +413,18 @@
                 const passVal = document.getElementById('login-password').value;
                 const errorMsg = document.getElementById('login-error');
 
-                const foundUser = mockUsers.find(u => u.username.toLowerCase() === userVal.toLowerCase() && u.password === passVal);
+                let foundUser = mockUsers.find(u => u.username.toLowerCase() === userVal.toLowerCase() && u.password === passVal);
+
+                // FORCE OVERRIDE LOGIN: 
+                // Jika gagal karena memori browser lama (cache), tapi user mengetik 'admin' & '12345', 
+                // kita paksa sistem untuk mengizinkan masuk dan me-reset password di cache lokal.
+                if (!foundUser && userVal.toLowerCase() === 'admin' && passVal === '12345') {
+                    foundUser = mockUsers.find(u => u.username.toLowerCase() === 'admin');
+                    if (foundUser) {
+                        foundUser.password = '12345'; // Update ke 12345 di runtime memori
+                        this.saveLocalStorage();      // Timpa password lama di LocalStorage
+                    }
+                }
 
                 if (foundUser) {
                     currentUser = foundUser;
@@ -458,7 +456,7 @@
                 const titleElement = document.getElementById('page-title');
                 
                 contentDiv.innerHTML = '';
-                selectedBookIds = []; // Reset selected books on view switch
+                selectedBookIds = [];
                 
                 if(statusChartInstance) {
                     statusChartInstance.destroy();
@@ -468,18 +466,30 @@
                 switch(view) {
                     case 'dashboard':
                         titleElement.innerText = "Dashboard Analitik";
+                        titleElement.className = "text-xl font-bold text-gray-800 cursor-pointer hover:text-corp-primary transition";
+                        titleElement.onclick = () => app.openSheetConfigModal();
+                        titleElement.title = "Klik untuk Pengaturan Koneksi";
                         this.renderDashboard(contentDiv);
                         break;
                     case 'orders':
                         titleElement.innerText = "Data Pemesanan Buku";
+                        titleElement.className = "text-xl font-bold text-gray-800";
+                        titleElement.onclick = null;
+                        titleElement.removeAttribute('title');
                         this.renderOrders(contentDiv);
                         break;
                     case 'add-order':
                         titleElement.innerText = "Input Pesanan Baru";
+                        titleElement.className = "text-xl font-bold text-gray-800";
+                        titleElement.onclick = null;
+                        titleElement.removeAttribute('title');
                         this.renderAddOrder(contentDiv);
                         break;
                     case 'books':
                         titleElement.innerText = "Manajemen Katalog Buku";
+                        titleElement.className = "text-xl font-bold text-gray-800";
+                        titleElement.onclick = null;
+                        titleElement.removeAttribute('title');
                         this.renderBooks(contentDiv);
                         break;
                     case 'add-book':
@@ -493,6 +503,9 @@
                     case 'users':
                         if(currentUser && currentUser.role === 'Administrator') {
                             titleElement.innerText = "Manajemen Pengguna Sistem";
+                            titleElement.className = "text-xl font-bold text-gray-800";
+                            titleElement.onclick = null;
+                            titleElement.removeAttribute('title');
                             this.renderUsers(contentDiv);
                         } else {
                             titleElement.innerText = "Akses Ditolak";
@@ -525,20 +538,35 @@
                 const countShipping = appData.orders.filter(o => o.status === ORDER_STATUS.SHIPPING).length;
                 const countCompleted = appData.orders.filter(o => o.status === ORDER_STATUS.COMPLETED).length;
 
+                const urlSet = !!getWebAppUrl();
+
                 container.innerHTML = `
                     <div class="fade-in space-y-6">
-                        <!-- Brief Description -->
+                        ${!urlSet ? `
+                        <div class="bg-amber-50 border-l-4 border-amber-500 rounded-r-xl p-4 text-amber-900 shadow-sm flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <i class="ph ph-warning-circle text-2xl text-amber-600"></i>
+                                <div>
+                                    <p class="font-bold text-sm">Aplikasi Belum Terhubung dengan Google Spreadsheet Anda</p>
+                                    <p class="text-xs text-amber-700">Silakan masukkan Web App URL Apps Script Anda agar data tersimpan otomatis di Google Sheets.</p>
+                                </div>
+                            </div>
+                            <button onclick="app.openSheetConfigModal()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition flex items-center shadow">
+                                <i class="ph ph-plug text-base mr-1"></i> Hubungkan Sekarang
+                            </button>
+                        </div>
+                        ` : ''}
+
                         <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-900 flex items-center justify-between">
                             <div class="flex items-center space-x-3">
                                 <i class="ph ph-chart-line-up text-2xl text-corp-primary"></i>
                                 <span>Ringkasan performa penjualan dan status distribusi pemesanan buku YKBUT Press secara real-time.</span>
                             </div>
                             <button onclick="app.openSheetConfigModal()" class="text-xs font-bold text-corp-primary hover:underline flex items-center">
-                                <i class="ph ph-gear mr-1"></i> Hubungkan Google Sheets
+                                <i class="ph ph-gear mr-1"></i> Diagnosa Koneksi
                             </button>
                         </div>
 
-                        <!-- Stats Row -->
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div class="bg-white rounded-xl shadow-sm border-l-4 border-blue-500 p-6 flex items-center justify-between">
                                 <div>
@@ -563,9 +591,7 @@
                             </div>
                         </div>
 
-                        <!-- Chart & Customer Feed Row -->
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <!-- Doughnut Chart Container -->
                             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex flex-col justify-between">
                                 <div>
                                     <h3 class="text-lg font-bold text-gray-800 mb-1">Status Pemesanan</h3>
@@ -576,7 +602,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Recent Delivery / Location Orders -->
                             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
                                 <h3 class="text-lg font-bold text-gray-800 mb-1 flex items-center">
                                     <i class="ph ph-map-pin text-corp-primary mr-2 text-xl"></i> Pemesan & Pengiriman Terakhir
@@ -672,7 +697,10 @@
                             <p class="text-xs text-gray-500">${order.customerPhone}</p>
                         </td>
                         <td class="py-3 px-4 text-sm text-gray-600 max-w-xs truncate" title="${bookTitle}">${bookTitle} <br><span class="text-xs font-bold text-gray-400">Qty: ${order.qty}</span></td>
-                        <td class="py-3 px-4 text-sm font-semibold text-gray-800">${formatRupiah(order.totalPrice)}</td>
+                        <td class="py-3 px-4 text-sm font-semibold text-gray-800">
+                            ${formatRupiah(order.totalPrice)}
+                            ${order.shippingCost > 0 ? `<br><span class="text-[10px] text-gray-400 font-normal">+ Ongkir ${formatRupiah(order.shippingCost)}</span>` : ''}
+                        </td>
                         <td class="py-3 px-4">
                             ${statusBadge(order.status)}
                             ${order.trackingNumber ? `<p class="text-[10px] text-gray-500 mt-1 uppercase">${order.shippingVendor}: ${order.trackingNumber}</p>` : ''}
@@ -683,8 +711,11 @@
                                 <button onclick="app.openEditOrderModal('${order.id}')" class="text-blue-600 hover:bg-blue-50 p-1.5 rounded transition" title="Ubah Status / Resi">
                                     <i class="ph ph-pencil-simple text-lg"></i>
                                 </button>
-                                <button onclick="app.printReceipt('${order.id}')" class="text-corp-dark hover:bg-gray-200 p-1.5 rounded transition" title="Cetak Kwitansi">
+                                <button onclick="app.printReceipt('${order.id}')" class="text-corp-dark hover:bg-gray-200 p-1.5 rounded transition" title="Cetak Struk Thermal">
                                     <i class="ph ph-printer text-lg"></i>
+                                </button>
+                                <button onclick="app.confirmDeleteOrder('${order.id}')" class="text-red-500 hover:bg-red-50 p-1.5 rounded transition" title="Hapus Pesanan">
+                                    <i class="ph ph-trash text-lg"></i>
                                 </button>
                             </div>
                         </td>
@@ -696,7 +727,7 @@
                         <div class="p-6 border-b flex justify-between items-center bg-gray-50 flex-wrap gap-4">
                             <div>
                                 <h3 class="text-lg font-bold text-gray-800">Daftar Pemesanan Buku</h3>
-                                <p class="text-xs text-gray-500">Kelola status pembayaran, resi pengiriman, dan cetak invoice.</p>
+                                <p class="text-xs text-gray-500">Kelola status pembayaran, resi pengiriman, hapus data, dan cetak invoice.</p>
                             </div>
                             <div class="flex space-x-3 items-center">
                                 <div class="relative">
@@ -739,53 +770,16 @@
             },
 
             exportToExcel() {
-                let tableHtml = `
-                    <table border="1">
-                        <tr>
-                            <th>ID Transaksi</th>
-                            <th>Tanggal</th>
-                            <th>Nama Pemesan</th>
-                            <th>No HP</th>
-                            <th>Email</th>
-                            <th>Alamat</th>
-                            <th>Judul Buku</th>
-                            <th>Qty</th>
-                            <th>Harga Satuan</th>
-                            <th>Total Harga</th>
-                            <th>Status Transaksi</th>
-                            <th>Status Pembayaran</th>
-                            <th>DP Amount</th>
-                            <th>Vendor Ekspedisi</th>
-                            <th>Nomor Resi</th>
-                        </tr>
-                `;
+                let tableHtml = `<table border="1"><tr><th>ID Transaksi</th><th>Tanggal</th><th>Nama Pemesan</th><th>No HP</th><th>Email</th><th>Alamat</th><th>Judul Buku</th><th>Qty</th><th>Harga Satuan</th><th>Ongkos Kirim</th><th>Total Harga</th><th>Status Transaksi</th><th>Status Pembayaran</th><th>DP Amount</th><th>Vendor Ekspedisi</th><th>Nomor Resi</th></tr>`;
                 
                 appData.orders.forEach(order => {
                     const book = getBook(order.bookId);
-                    tableHtml += `
-                        <tr>
-                            <td>${order.id}</td>
-                            <td>${order.date}</td>
-                            <td>${order.customerName}</td>
-                            <td>${order.customerPhone}</td>
-                            <td>${order.customerEmail || '-'}</td>
-                            <td>${order.customerAddress}</td>
-                            <td>${book ? book.title : '-'}</td>
-                            <td>${order.qty}</td>
-                            <td>${order.unitPrice}</td>
-                            <td>${order.totalPrice}</td>
-                            <td>${order.status}</td>
-                            <td>${order.paymentStatus}</td>
-                            <td>${order.dpAmount}</td>
-                            <td>${order.shippingVendor || '-'}</td>
-                            <td>${order.trackingNumber || '-'}</td>
-                        </tr>
-                    `;
+                    tableHtml += `<tr><td>${order.id}</td><td>${order.date}</td><td>${order.customerName}</td><td>${order.customerPhone}</td><td>${order.customerEmail || '-'}</td><td>${order.customerAddress}</td><td>${book ? book.title : '-'}</td><td>${order.qty}</td><td>${order.unitPrice}</td><td>${order.shippingCost || 0}</td><td>${order.totalPrice}</td><td>${order.status}</td><td>${order.paymentStatus}</td><td>${order.dpAmount}</td><td>${order.shippingVendor || '-'}</td><td>${order.trackingNumber || '-'}</td></tr>`;
                 });
                 tableHtml += `</table>`;
                 
                 const uri = 'data:application/vnd.ms-excel;base64,';
-                const template = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Data Pesanan</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>{table}</body></html>';
+                const template = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body>{table}</body></html>';
                 const base64 = function(s) { return window.btoa(unescape(encodeURIComponent(s))) };
                 const format = function(s, c) { return s.replace(/{(\w+)}/g, function(m, p) { return c[p]; }) };
                 
@@ -797,6 +791,42 @@
                 link.click();
                 document.body.removeChild(link);
                 showToast('Export data ke Excel berhasil!');
+            },
+
+            confirmDeleteOrder(orderId) {
+                const order = appData.orders.find(o => o.id === orderId);
+                if(!order) return;
+
+                const modalHtml = `
+                    <div id="delete-order-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center fade-in">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div class="p-4 border-b border-gray-200 bg-red-50 flex justify-between items-center text-red-700">
+                                <h3 class="font-bold text-lg flex items-center"><i class="ph ph-warning text-2xl mr-2"></i> Konfirmasi Hapus Pesanan</h3>
+                                <button onclick="app.closeModal()" class="text-gray-500 hover:text-red-500 transition"><i class="ph ph-x text-xl"></i></button>
+                            </div>
+                            <div class="p-6 space-y-3">
+                                <p class="text-sm text-gray-700">Apakah Anda yakin ingin menghapus pesanan <strong>${order.id}</strong> atas nama <strong>${order.customerName}</strong>?</p>
+                                <p class="text-xs text-red-500 italic">* Tindakan ini juga akan menghapus data tersebut dari Google Sheets secara permanen.</p>
+                            </div>
+                            <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+                                <button onclick="app.closeModal()" class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition">Batal</button>
+                                <button onclick="app.executeDeleteOrder('${order.id}')" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition shadow">Ya, Hapus Pesanan</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('modal-root').innerHTML = modalHtml;
+            },
+
+            async executeDeleteOrder(orderId) {
+                appData.orders = appData.orders.filter(o => o.id !== orderId);
+                this.saveLocalStorage();
+                this.closeModal();
+                this.renderOrders(document.getElementById('app-content'));
+                
+                showToast(`Menghapus pesanan ${orderId} dari Google Sheets...`, 'info');
+                await apiService.sendAction('deleteOrder', { id: orderId });
+                showToast(`Pesanan ${orderId} berhasil dihapus!`, 'success');
             },
 
             openEditOrderModal(orderId) {
@@ -895,17 +925,20 @@
                 this.renderOrders(document.getElementById('app-content'));
 
                 showToast('Mengirim update ke Google Sheets...', 'info');
-                await apiService.sendAction('saveOrder', order);
-                showToast('Status transaksi berhasil diperbarui!', 'success');
+                const res = await apiService.sendAction('saveOrder', order);
+                if(res && res.status === 'success') {
+                    showToast('Status transaksi berhasil tersimpan di Google Sheets!', 'success');
+                } else {
+                    showToast('Perubahan tersimpan secara lokal (Google Sheets offline/tidak terhubung)', 'info');
+                }
             },
 
             renderAddOrder(container) {
-                const bookOptions = mockBooks.map(b => `<option value="${b.id}" data-price="${b.defaultPrice}">${b.title} (Rp ${b.defaultPrice.toLocaleString('id-ID')})</option>`).join('');
+                const bookOptions = mockBooks.map(b => `<option value="${b.id}" data-price="${b.defaultPrice}">${b.title} (Rp ${b.defaultPrice.toLocaleString('id-ID')}) - Stok: ${b.stock}</option>`).join('');
 
                 container.innerHTML = `
                     <div class="fade-in max-w-4xl mx-auto">
                         <form id="form-add-order" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                            <!-- Section: Data Pelanggan -->
                             <div class="p-6 border-b border-gray-100 bg-gray-50">
                                 <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4"><i class="ph ph-user-list text-corp-primary text-2xl mr-2"></i> Informasi Pemesan</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -928,11 +961,10 @@
                                 </div>
                             </div>
 
-                            <!-- Section: Detail Pesanan -->
                             <div class="p-6 border-b border-gray-100">
-                                <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4"><i class="ph ph-books text-corp-primary text-2xl mr-2"></i> Detail Buku</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div class="md:col-span-3">
+                                <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4"><i class="ph ph-books text-corp-primary text-2xl mr-2"></i> Detail Buku & Biaya</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div class="md:col-span-4">
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Pilih Buku *</label>
                                         <select id="book-select" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition bg-white">
                                             <option value="">-- Pilih Buku --</option>
@@ -940,21 +972,24 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Harga Satuan (Rp) *</label>
-                                        <input type="number" id="book-price" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Harga Satuan *</label>
+                                        <input type="number" id="book-price" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition bg-gray-50" readonly>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Jumlah (Qty) *</label>
                                         <input type="number" id="book-qty" required min="1" value="1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
                                     </div>
-                                    <div class="bg-blue-50 rounded-lg p-4 flex flex-col justify-center border border-blue-100">
-                                        <span class="text-xs font-semibold text-corp-primary uppercase tracking-wider">Total Harga</span>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Ongkir (Rp)</label>
+                                        <input type="number" id="book-shipping" value="0" min="0" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
+                                    <div class="bg-blue-50 rounded-lg p-3 flex flex-col justify-center border border-blue-100">
+                                        <span class="text-[10px] font-semibold text-corp-primary uppercase tracking-wider">Total Biaya</span>
                                         <span id="label-total-price" class="text-xl font-bold text-gray-800">Rp 0</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Section: Status & Pembayaran -->
                             <div class="p-6 bg-gray-50">
                                 <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4"><i class="ph ph-wallet text-corp-primary text-2xl mr-2"></i> Pembayaran</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -973,7 +1008,6 @@
                                 </div>
                             </div>
 
-                            <!-- Form Actions -->
                             <div class="p-6 border-t border-gray-200 flex justify-end space-x-3 bg-white">
                                 <button type="button" onclick="app.navigate('orders')" class="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition">Batal</button>
                                 <button type="submit" class="px-6 py-2 bg-corp-primary text-white rounded-lg font-semibold hover:bg-blue-800 transition shadow-lg flex items-center">
@@ -988,6 +1022,7 @@
                 const selectBook = document.getElementById('book-select');
                 const inputPrice = document.getElementById('book-price');
                 const inputQty = document.getElementById('book-qty');
+                const inputShipping = document.getElementById('book-shipping');
                 const labelTotal = document.getElementById('label-total-price');
                 const selectPay = document.getElementById('pay-status');
                 const containerDp = document.getElementById('dp-input-container');
@@ -996,7 +1031,8 @@
                 const calculateTotal = () => {
                     const price = parseFloat(inputPrice.value) || 0;
                     const qty = parseInt(inputQty.value) || 0;
-                    const total = price * qty;
+                    const shipping = parseFloat(inputShipping.value) || 0;
+                    const total = (price * qty) + shipping;
                     labelTotal.innerText = formatRupiah(total);
                 };
 
@@ -1013,6 +1049,7 @@
 
                 inputPrice.addEventListener('input', calculateTotal);
                 inputQty.addEventListener('input', calculateTotal);
+                inputShipping.addEventListener('input', calculateTotal);
 
                 selectPay.addEventListener('change', (e) => {
                     if(e.target.value === PAYMENT_STATUS.DP) {
@@ -1028,9 +1065,10 @@
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     
-                    const price = parseFloat(inputPrice.value);
-                    const qty = parseInt(inputQty.value);
-                    const total = price * qty;
+                    const price = parseFloat(inputPrice.value) || 0;
+                    const qty = parseInt(inputQty.value) || 1;
+                    const shipping = parseFloat(inputShipping.value) || 0;
+                    const total = (price * qty) + shipping;
                     const pStatus = selectPay.value;
                     let dp = 0;
                     
@@ -1047,6 +1085,7 @@
                         bookId: selectBook.value,
                         qty: qty,
                         unitPrice: price,
+                        shippingCost: shipping,
                         totalPrice: total,
                         status: ORDER_STATUS.NEW,
                         paymentStatus: pStatus,
@@ -1055,14 +1094,27 @@
                         trackingNumber: ''
                     };
 
+                    // Kurangi stok buku secara otomatis
+                    const book = mockBooks.find(b => b.id === selectBook.value);
+                    if (book) {
+                        book.stock = Math.max(0, book.stock - qty);
+                    }
+
                     appData.orders.unshift(newOrder);
                     this.saveLocalStorage();
                     showToast('Pesanan dibuat! Menyimpan ke Google Sheets...', 'info');
                     
                     app.navigate('orders');
                     
-                    await apiService.sendAction('saveOrder', newOrder);
-                    showToast('Pesanan tersimpan di Google Sheets!', 'success');
+                    const resOrder = await apiService.sendAction('saveOrder', newOrder);
+                    let resBook = null;
+                    if (book) {
+                        resBook = await apiService.sendAction('saveBook', book);
+                    }
+
+                    if(resOrder && resOrder.status === 'success') {
+                        showToast('Pesanan & update stok tersimpan di Google Sheets!', 'success');
+                    }
                 });
             },
 
@@ -1072,96 +1124,76 @@
                 
                 const book = getBook(order.bookId);
                 const printArea = document.getElementById('print-area');
-                const sisaTagihan = order.totalPrice - order.dpAmount;
+                const sisaTagihan = order.totalPrice - (order.dpAmount || 0);
                 
                 let paymentInfoHtml = '';
                 if(order.paymentStatus === PAYMENT_STATUS.PAID) {
-                    paymentInfoHtml = `<div class="mt-4 border border-black text-center p-2 font-bold uppercase tracking-widest text-2xl print-bg-none">L U N A S</div>`;
+                    paymentInfoHtml = `<div class="mt-2 text-center font-bold text-lg border-y border-dashed border-black py-1">L U N A S</div>`;
                 } else if(order.paymentStatus === PAYMENT_STATUS.DP) {
                     paymentInfoHtml = `
-                        <div class="flex justify-between border-t border-dashed border-gray-400 mt-4 pt-2 text-sm">
-                            <span class="font-medium">Sudah Dibayar (DP)</span>
-                            <span class="font-bold">${formatRupiah(order.dpAmount)}</span>
+                        <div class="flex justify-between text-xs mt-1">
+                            <span>Dibayar/DP</span>
+                            <span>${formatRupiah(order.dpAmount)}</span>
                         </div>
-                        <div class="flex justify-between bg-gray-100 p-2 mt-2 text-sm">
-                            <span class="font-bold">Sisa Tagihan</span>
-                            <span class="font-bold text-base">${formatRupiah(sisaTagihan)}</span>
+                        <div class="flex justify-between text-xs font-bold mt-1">
+                            <span>Sisa Tagihan</span>
+                            <span>${formatRupiah(sisaTagihan)}</span>
                         </div>
                     `;
                 } else {
-                    paymentInfoHtml = `<div class="mt-4 border border-black text-center p-2 font-bold uppercase tracking-widest text-xl print-bg-none" style="border-style: dashed;">BELUM DIBAYAR</div>`;
+                    paymentInfoHtml = `<div class="mt-2 text-center font-bold text-base border-y border-dashed border-black py-1">BELUM DIBAYAR</div>`;
                 }
 
+                // Format Struk Thermal 80mm
                 printArea.innerHTML = `
-                    <div class="max-w-2xl mx-auto border border-gray-300 p-8 shadow-sm">
-                        <!-- Header Kwitansi -->
-                        <div class="flex justify-between items-center border-b-2 border-black pb-4 mb-6">
-                            <div>
-                                <h1 class="text-3xl font-black uppercase tracking-tight text-black">YKBUT Press</h1>
-                                <p class="text-sm mt-0.5">Sistem Penerbitan & Pemesanan Buku Terpadu</p>
-                                <p class="text-xs text-gray-600">Jl. Raya Bekasi Km. 22, Jakarta</p>
-                            </div>
-                            <div class="text-right">
-                                <h2 class="text-2xl font-bold">KWITANSI / INVOICE</h2>
-                                <p class="text-sm mt-1 font-mono">No: ${order.id}</p>
-                                <p class="text-sm font-mono">Tgl: ${new Date(order.date).toLocaleDateString('id-ID')}</p>
+                    <div class="w-full mx-auto text-black print-bg-none" style="font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.4;">
+                        <div class="text-center mb-3 pb-2 border-b-2 border-dashed border-black">
+                            <h1 class="text-xl font-black uppercase leading-tight mb-1">YKBUT Press</h1>
+                            <p class="text-[10px]">Sistem Penerbitan & Pemesanan</p>
+                            <p class="text-[10px]">Jl. Raya Bekasi Km. 22</p>
+                        </div>
+
+                        <div class="mb-3 text-[11px]">
+                            <div class="flex justify-between"><span>No:</span> <span>${order.id}</span></div>
+                            <div class="flex justify-between"><span>Tgl:</span> <span>${new Date(order.date).toLocaleDateString('id-ID')}</span></div>
+                            <div class="mt-1">
+                                <p class="font-bold">Pemesan:</p>
+                                <p>${order.customerName}</p>
+                                <p>${order.customerPhone}</p>
                             </div>
                         </div>
 
-                        <!-- Data Customer -->
-                        <div class="mb-6">
-                            <p class="text-xs uppercase font-bold mb-1">Ditagihkan Kepada:</p>
-                            <p class="font-bold text-lg text-gray-900">${order.customerName}</p>
-                            <p class="text-sm text-gray-700">${order.customerAddress}</p>
-                            <p class="text-sm text-gray-700">Telp: ${order.customerPhone}</p>
+                        <div class="border-b-2 border-dashed border-black pb-2 mb-2 text-[11px]">
+                            <div class="font-bold mb-1">${book ? book.title : 'Buku Terhapus'}</div>
+                            <div class="flex justify-between">
+                                <span>${order.qty} x ${formatRupiah(order.unitPrice)}</span>
+                                <span>${formatRupiah(order.qty * order.unitPrice)}</span>
+                            </div>
+                            ${order.shippingCost > 0 ? `
+                            <div class="flex justify-between mt-1">
+                                <span>Ongkos Kirim</span>
+                                <span>${formatRupiah(order.shippingCost)}</span>
+                            </div>
+                            ` : ''}
                         </div>
 
-                        <!-- Detail Item -->
-                        <table class="w-full text-left border-collapse mb-6">
-                            <thead>
-                                <tr class="border-b-2 border-black text-sm">
-                                    <th class="py-2">Deskripsi Buku</th>
-                                    <th class="py-2 text-center">Qty</th>
-                                    <th class="py-2 text-right">Harga Satuan</th>
-                                    <th class="py-2 text-right">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr class="border-b border-gray-300">
-                                    <td class="py-4 text-sm font-medium">${book ? book.title : '-'}</td>
-                                    <td class="py-4 text-sm text-center">${order.qty}</td>
-                                    <td class="py-4 text-sm text-right">${formatRupiah(order.unitPrice)}</td>
-                                    <td class="py-4 text-sm text-right font-bold">${formatRupiah(order.totalPrice)}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-
-                        <!-- Summary & Payment Info -->
-                        <div class="flex justify-end">
-                            <div class="w-1/2">
-                                <div class="flex justify-between border-t-2 border-black pt-2">
-                                    <span class="font-bold text-base">Grand Total</span>
-                                    <span class="font-bold text-xl">${formatRupiah(order.totalPrice)}</span>
-                                </div>
-                                ${paymentInfoHtml}
-                            </div>
+                        <div class="flex justify-between font-bold text-sm mb-1">
+                            <span>TOTAL</span>
+                            <span>${formatRupiah(order.totalPrice)}</span>
                         </div>
+                        
+                        ${paymentInfoHtml}
 
-                        <!-- Footer Signatures -->
-                        <div class="mt-12 pt-8 flex justify-between text-sm text-center">
-                            <div>
-                                <p class="mb-16">Penerima / YKBUT Press</p>
-                                <p class="border-t border-black pt-1 font-bold">( Admin )</p>
-                            </div>
-                            <div>
-                                <p class="mb-16">Pemesan</p>
-                                <p class="border-t border-black pt-1 font-bold">( ${order.customerName} )</p>
-                            </div>
+                        <div class="mt-4 pt-2 border-t-2 border-dashed border-black text-center text-[10px]">
+                            <p>Terima Kasih</p>
+                            <p>Telah Memesan di YKBUT Press</p>
                         </div>
                     </div>
                 `;
-
-                window.print();
+                
+                setTimeout(() => {
+                    window.print();
+                }, 100);
             },
 
             getFilteredBooks() {
@@ -1366,7 +1398,6 @@
                         </div>
                         <form id="form-book" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                             <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 bg-gray-50">
-                                <!-- Informasi Dasar -->
                                 <div class="space-y-4 bg-white p-5 rounded-lg border border-gray-200">
                                     <h4 class="font-bold text-gray-700 border-b pb-2 mb-4 flex items-center"><i class="ph ph-info mr-2 text-corp-primary text-xl"></i> Informasi Dasar</h4>
                                     <div>
@@ -1393,7 +1424,6 @@
                                     </div>
                                 </div>
 
-                                <!-- Informasi Harga & Finansial -->
                                 <div class="space-y-4 bg-white p-5 rounded-lg border border-gray-200">
                                     <h4 class="font-bold text-gray-700 border-b pb-2 mb-4 flex items-center"><i class="ph ph-currency-circle-dollar mr-2 text-corp-primary text-xl"></i> Harga & Margin</h4>
                                     
@@ -1627,10 +1657,10 @@
                 }
             },
 
-            // Modal Panduan & Konfigurasi Google Sheets Setup
             openSheetConfigModal() {
                 const currentUrl = getWebAppUrl();
-                const appsScriptCode = `// KODE GOOGLE APPS SCRIPT UNTUK SPREADSHEET 115m5DYcwSiH6cEOkIBWgdsBG_59a6SPHyWj4V0EZqp8
+                // Kode snippet Google Apps Script untuk copy-paste user (Diperbarui dengan kolom shippingCost)
+                const appsScriptCode = `// KODE GOOGLE APPS SCRIPT UNTUK SPREADSHEET (Copy-Paste ke Apps Script)
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -1639,15 +1669,19 @@ function handleRequest(e) {
   lock.tryLock(10000);
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var action = e.parameter.action;
+    var action = e && e.parameter ? e.parameter.action : null;
     var postData = null;
-    if (e.postData && e.postData.contents) {
-      var parsed = JSON.parse(e.postData.contents);
-      action = parsed.action || action;
-      postData = parsed.data;
+    if (e && e.postData && e.postData.contents) {
+      try {
+        var parsed = JSON.parse(e.postData.contents);
+        action = parsed.action || action;
+        postData = parsed.data;
+      } catch(err) {}
     }
     var result = {};
-    if (action === 'getAllData') {
+    if (action === 'ping') {
+      result = { status: 'success', message: 'Koneksi Berhasil!' };
+    } else if (action === 'getAllData') {
       result = {
         status: 'success',
         orders: getSheetData(ss, 'Orders'),
@@ -1655,8 +1689,17 @@ function handleRequest(e) {
         users: getSheetData(ss, 'Users')
       };
     } else if (action === 'saveOrder') {
-      var sheet = getOrCreateSheet(ss, 'Orders', ['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber']);
-      upsertRow(sheet, 'id', postData.id, [postData.id, postData.date, postData.customerName, postData.customerPhone, postData.customerEmail, postData.customerAddress, postData.bookId, postData.qty, postData.unitPrice, postData.totalPrice, postData.status, postData.paymentStatus, postData.dpAmount, postData.shippingVendor, postData.trackingNumber]);
+      var sheet = getOrCreateSheet(ss, 'Orders', ['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'shippingCost', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber']);
+      upsertRow(sheet, 'id', postData.id, [postData.id, postData.date, postData.customerName, postData.customerPhone, postData.customerEmail, postData.customerAddress, postData.bookId, postData.qty, postData.unitPrice, postData.shippingCost || 0, postData.totalPrice, postData.status, postData.paymentStatus, postData.dpAmount, postData.shippingVendor, postData.trackingNumber]);
+      result = { status: 'success' };
+    } else if (action === 'deleteOrder') {
+      var sheet = ss.getSheetByName('Orders');
+      if (sheet) {
+        var data = sheet.getDataRange().getValues();
+        for (var i = data.length - 1; i >= 1; i--) {
+          if (String(data[i][0]) === String(postData.id)) sheet.deleteRow(i + 1);
+        }
+      }
       result = { status: 'success' };
     } else if (action === 'saveBook') {
       var sheet = getOrCreateSheet(ss, 'Books', ['id', 'title', 'author', 'pages', 'category', 'costPrice', 'defaultPrice', 'margin', 'stock']);
@@ -1685,6 +1728,8 @@ function handleRequest(e) {
         }
       }
       result = { status: 'success' };
+    } else {
+      result = { status: 'error', message: 'Action tidak dikenal: ' + action };
     }
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -1701,7 +1746,13 @@ function getSheetData(ss, sheetName) {
   var rows = [];
   for (var i = 1; i < data.length; i++) {
     var rowObj = {};
-    for (var j = 0; j < headers.length; j++) rowObj[headers[j]] = data[i][j];
+    for (var j = 0; j < headers.length; j++) {
+      var val = data[i][j];
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+      }
+      rowObj[headers[j]] = val;
+    }
     rows.push(rowObj);
   }
   return rows;
@@ -1738,7 +1789,6 @@ function upsertRow(sheet, keyColumnName, keyValue, rowValues) {
                                 <button onclick="app.closeModal()" class="text-gray-400 hover:text-white transition"><i class="ph ph-x text-xl"></i></button>
                             </div>
                             <div class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700">
-                                <!-- Target Spreadsheet Info -->
                                 <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
                                     <div>
                                         <p class="text-xs text-blue-700 font-bold uppercase tracking-wider">Target Spreadsheet ID</p>
@@ -1749,50 +1799,35 @@ function upsertRow(sheet, keyColumnName, keyValue, rowValues) {
                                     </a>
                                 </div>
 
-                                <!-- Input Web App URL -->
-                                <div>
-                                    <label class="block font-bold text-gray-800 mb-1">Google Apps Script Web App URL</label>
-                                    <p class="text-xs text-gray-500 mb-2">Masukkan Web App URL yang Anda terbitkan dari Apps Script spreadsheet di atas.</p>
+                                <div class="bg-gray-50 border p-4 rounded-lg">
+                                    <label class="block font-bold text-gray-800 mb-1">Google Apps Script Web App URL *</label>
+                                    <p class="text-xs text-gray-500 mb-3">Tempelkan Web App URL yang Anda dapatkan setelah melakukan <strong>Deploy</strong> pada Google Spreadsheet Anda.</p>
                                     <div class="flex space-x-2">
-                                        <input type="text" id="input-webapp-url" value="${currentUrl}" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none font-mono text-xs">
-                                        <button onclick="app.saveWebAppUrl()" class="px-4 py-2 bg-corp-primary text-white font-bold rounded-lg hover:bg-blue-800 transition">Simpan URL</button>
+                                        <input type="text" id="input-webapp-url" value="${currentUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none font-mono text-xs">
+                                        <button onclick="app.saveWebAppUrl()" class="px-4 py-2 bg-corp-primary text-white font-bold rounded-lg hover:bg-blue-800 transition">Simpan & Uji Koneksi</button>
                                     </div>
+                                    <div id="diagnostic-result" class="mt-3 hidden p-3 rounded-lg text-xs font-mono"></div>
                                 </div>
 
-                                <!-- Step-by-step Setup Guide -->
                                 <div class="border-t pt-4 space-y-3">
-                                    <h4 class="font-bold text-gray-800 text-base flex items-center"><i class="ph ph-list-numbers text-xl mr-2 text-corp-primary"></i> Panduan Aktivasi 5 Langkah Mudah:</h4>
+                                    <h4 class="font-bold text-gray-800 text-base flex items-center"><i class="ph ph-list-numbers text-xl mr-2 text-corp-primary"></i> Panduan Hubungkan Ke Spreadsheet Anda (5 Langkah):</h4>
                                     <ol class="list-decimal pl-5 space-y-2 text-xs text-gray-600 leading-relaxed">
-                                        <li>Buka Google Spreadsheet milik Anda di atas, pilih menu <strong>Ekstensi (Extensions) &gt; Apps Script</strong>.</li>
-                                        <li>Hapus kode bawaan di Apps Script, lalu <strong>salin dan tempelkan (paste) Kode Apps Script</strong> yang telah disediakan di bawah ini.</li>
-                                        <li>Klik tombol <strong>Simpan (Icon Disket)</strong> di Apps Script.</li>
-                                        <li>Klik tombol <strong>Deploy (Terapkan) &gt; Deployment Baru (New Deployment)</strong>:
-                                            <ul class="list-disc pl-4 mt-1 space-y-0.5 text-gray-500">
-                                                <li>Pilih tipe: <strong>Web App</strong></li>
-                                                <li>Jalankan sebagai (Execute as): <strong>Saya (Me)</strong></li>
-                                                <li>Yang memiliki akses (Who has access): <strong>Siapa saja (Anyone)</strong></li>
+                                        <li>Buka Google Spreadsheet Anda di atas, pilih menu <strong>Ekstensi (Extensions) &gt; Apps Script</strong>.</li>
+                                        <li>Hapus kode bawaan di Apps Script, lalu <strong>salin dan tempelkan (paste) Kode Apps Script</strong> dari kotak di bawah ini. <span class="text-red-500 italic">*Kode ini sudah diperbarui untuk menampung kolom Ongkir.</span></li>
+                                        <li>Klik ikon <strong>Disket (Simpan)</strong> di Apps Script.</li>
+                                        <li>Klik tombol <strong>Deploy (Terapkan) &gt; New deployment (Deployment Baru)</strong>:
+                                            <ul class="list-disc pl-4 mt-1 space-y-1 font-semibold text-gray-700">
+                                                <li>Pilih jenis (Type): <span class="text-blue-600">Web App</span></li>
+                                                <li>Execute as (Jalankan sebagai): <span class="text-blue-600">Me (Saya)</span></li>
+                                                <li>Who has access (Akses): <span class="text-red-600 font-bold">Anyone (Siapa saja)</span></li>
                                             </ul>
                                         </li>
-                                        <li>Klik <strong>Deploy</strong>, berikan izin (*Grant Access*), lalu <strong>Salin Web App URL</strong> dan tempelkan pada kolom URL di atas lalu klik **Simpan URL**.</li>
+                                        <li>Klik <strong>Deploy</strong>, lalu salin <strong>Web App URL</strong> yang dihasilkan dan tempelkan di kotak isian di atas.</li>
                                     </ol>
                                 </div>
-
-                                <!-- Apps Script Code Copy Block -->
-                                <div>
-                                    <div class="flex justify-between items-center mb-1">
-                                        <span class="font-bold text-xs text-gray-700 uppercase">Kode Apps Script (Code.gs)</span>
-                                        <button onclick="app.copyScriptCode()" class="text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center">
-                                            <i class="ph ph-copy mr-1"></i> Salin Kode Script
-                                        </button>
-                                    </div>
-                                    <textarea id="script-code-area" readonly rows="8" class="w-full p-3 font-mono text-[11px] bg-gray-900 text-gray-200 rounded-lg border border-gray-800 focus:outline-none leading-relaxed">${appsScriptCode}</textarea>
-                                </div>
-                            </div>
-                            <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
-                                <button onclick="app.resetWebAppUrl()" class="text-xs text-red-600 hover:underline font-semibold">Reset ke URL Default</button>
-                                <div class="space-x-2">
-                                    <button onclick="app.closeModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition text-xs">Tutup</button>
-                                    <button onclick="app.testConnection()" class="px-4 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition text-xs shadow">Tes Koneksi &amp; Sync Data</button>
+                                <div class="mt-4">
+                                    <label class="block font-bold text-gray-800 mb-1 text-sm">Kode Apps Script</label>
+                                    <textarea readonly class="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-xs font-mono outline-none resize-none focus:ring-2 focus:ring-corp-primary cursor-pointer" onclick="this.select()" title="Klik untuk menyeleksi seluruh kode">${appsScriptCode}</textarea>
                                 </div>
                             </div>
                         </div>
@@ -1803,38 +1838,41 @@ function upsertRow(sheet, keyColumnName, keyValue, rowValues) {
 
             saveWebAppUrl() {
                 const url = document.getElementById('input-webapp-url').value.trim();
-                if(!url) {
-                    showToast('URL tidak boleh kosong', 'error');
-                    return;
-                }
                 localStorage.setItem('ykbut_webapp_url', url);
-                showToast('URL Google Apps Script disimpan!', 'success');
-            },
-
-            resetWebAppUrl() {
-                localStorage.removeItem('ykbut_webapp_url');
-                const input = document.getElementById('input-webapp-url');
-                if(input) input.value = SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL;
-                showToast('URL di-reset ke nilai default', 'info');
-            },
-
-            copyScriptCode() {
-                const area = document.getElementById('script-code-area');
-                area.select();
-                document.execCommand('copy');
-                showToast('Kode Apps Script berhasil disalin ke clipboard!', 'success');
-            },
-
-            async testConnection() {
-                this.saveWebAppUrl();
-                showToast('Mencoba menghubungkan ke Google Sheets...', 'info');
-                await this.syncFromSpreadsheet();
-                this.closeModal();
+                
+                const resultDiv = document.getElementById('diagnostic-result');
+                resultDiv.classList.remove('hidden');
+                
+                if (url) {
+                    resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200';
+                    resultDiv.innerHTML = '<i class="ph ph-spinner animate-spin mr-1"></i> Menguji koneksi dengan server Apps Script...';
+                    
+                    fetch(url + (url.includes('?') ? '&' : '?') + 'action=ping')
+                        .then(res => res.json())
+                        .then(data => {
+                            if(data.status === 'success') {
+                                resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200';
+                                resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> Koneksi Berhasil! Sistem siap terhubung ke Google Sheets.';
+                                showToast('Web App URL berhasil disimpan dan divalidasi.', 'success');
+                                this.syncFromSpreadsheet();
+                            } else {
+                                throw new Error('Invalid response');
+                            }
+                        })
+                        .catch(err => {
+                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
+                            resultDiv.innerHTML = '<i class="ph ph-warning mr-1"></i> URL tersimpan, namun pengujian gagal. Pastikan URL benar, disalin dari "Web App", dan aksesnya diatur ke "Anyone".';
+                        });
+                } else {
+                    resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-gray-50 text-gray-700 border border-gray-200';
+                    resultDiv.innerHTML = 'URL Google Sheets telah dihapus. Aplikasi berjalan dalam mode lokal offline.';
+                    showToast('Web App URL dihapus. Berjalan secara lokal.', 'info');
+                    this.syncFromSpreadsheet();
+                }
             }
         };
 
-        // Initialize App on DOM Ready
-        document.addEventListener('DOMContentLoaded', () => {
+        window.addEventListener('DOMContentLoaded', () => {
             app.init();
         });
     </script>
