@@ -47,24 +47,142 @@
             background: #94a3b8; 
         }
 
+        /*
+         * Thermal receipt printing
+         * Physical paper: 58 mm
+         * Typical printable area: +/- 48 mm (5 mm margin each side)
+         * UI remains unchanged because these rules only apply to print media.
+         */
         @media print {
-            @page { margin: 0; }
-            body * {
-                visibility: hidden;
-            }
-            #print-area, #print-area * {
-                visibility: visible;
-            }
-            #print-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 80mm !important; /* Ukuran Thermal Printer */
-                padding: 4mm !important;
-                background: white;
-                color: black;
+            @page {
+                size: 58mm auto;
                 margin: 0;
             }
+
+            html, body {
+                width: 58mm !important;
+                min-width: 58mm !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+            }
+
+            body * {
+                visibility: hidden !important;
+            }
+
+            #print-area, #print-area * {
+                visibility: visible !important;
+            }
+
+            /* Important: the element is hidden on screen via Tailwind's .hidden.
+               display:block here is required so Chromium/Edge can actually print it. */
+            #print-area {
+                display: block !important;
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 58mm !important;
+                max-width: 58mm !important;
+                min-width: 58mm !important;
+                box-sizing: border-box !important;
+                margin: 0 !important;
+                padding: 5mm !important;
+                background: #fff !important;
+                color: #000 !important;
+                overflow: visible !important;
+                font-family: 'Courier New', Courier, monospace !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            #print-area .thermal-receipt {
+                width: 100% !important;
+                max-width: 48mm !important;
+                min-width: 0 !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                box-sizing: border-box !important;
+                color: #000 !important;
+                background: #fff !important;
+                font-family: 'Courier New', Courier, monospace !important;
+                font-size: 11px !important;
+                line-height: 1.25 !important;
+                word-break: normal;
+                overflow-wrap: anywhere;
+            }
+
+            #print-area .thermal-receipt * {
+                box-sizing: border-box;
+            }
+
+            #print-area .thermal-receipt .receipt-title {
+                font-size: 16px !important;
+                line-height: 1.15 !important;
+                font-weight: 900 !important;
+            }
+
+            #print-area .thermal-receipt .receipt-small {
+                font-size: 9px !important;
+                line-height: 1.25 !important;
+            }
+
+            #print-area .thermal-receipt .receipt-label {
+                font-size: 10px !important;
+                line-height: 1.25 !important;
+            }
+
+            #print-area .thermal-receipt .receipt-total {
+                font-size: 13px !important;
+                line-height: 1.2 !important;
+                font-weight: 900 !important;
+            }
+
+            #print-area .thermal-receipt .receipt-payment {
+                font-size: 10px !important;
+                line-height: 1.25 !important;
+            }
+
+            #print-area .thermal-receipt .receipt-divider {
+                border-color: #000 !important;
+                border-style: dashed !important;
+            }
+
+            #print-area .thermal-receipt .receipt-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: flex-start !important;
+                gap: 8px !important;
+                width: 100% !important;
+            }
+
+            #print-area .thermal-receipt .receipt-row > :first-child {
+                min-width: 0;
+                flex: 1 1 auto;
+            }
+
+            #print-area .thermal-receipt .receipt-row > :last-child {
+                flex: 0 0 auto;
+                text-align: right;
+                white-space: nowrap;
+            }
+
+            #print-area .thermal-receipt .receipt-book-title {
+                font-weight: 700 !important;
+                white-space: normal !important;
+                overflow-wrap: anywhere;
+            }
+
+            #print-area .thermal-receipt .receipt-address {
+                white-space: pre-line !important;
+                overflow-wrap: anywhere;
+            }
+
+            #print-area .thermal-receipt .receipt-no-break {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+            }
+
             .print-bg-none { background: none !important; }
         }
         
@@ -99,7 +217,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="logo YKBUT Press_2.jpeg" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -134,7 +252,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="logo YKBUT Press_2.jpeg" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -251,6 +369,35 @@
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
         const getBook = (id) => mockBooks.find(b => b.id === id);
 
+        // Pengaturan header struk thermal. Disimpan di browser agar tidak mengubah
+        // struktur data Orders/Books/Users di Google Sheets.
+        const DEFAULT_RECEIPT_HEADER = {
+            title: 'YKBUT Press',
+            subtitle: 'Sistem Penerbitan & Pemesanan',
+            address1: 'Jl. Raya Bekasi Km. 22',
+            address2: '',
+            phone: ''
+        };
+
+        let receiptHeader = { ...DEFAULT_RECEIPT_HEADER };
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const loadReceiptHeader = () => {
+            try {
+                const saved = localStorage.getItem('ykbut_receipt_header');
+                if (saved) receiptHeader = { ...DEFAULT_RECEIPT_HEADER, ...JSON.parse(saved) };
+            } catch (e) {
+                console.warn('Receipt header settings error:', e);
+                receiptHeader = { ...DEFAULT_RECEIPT_HEADER };
+            }
+        };
+
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             if(!container) return;
@@ -332,7 +479,11 @@
                     if (savedOrders) appData.orders = JSON.parse(savedOrders);
                     if (savedBooks) mockBooks = JSON.parse(savedBooks);
                     if (savedUsers) mockUsers = JSON.parse(savedUsers);
-                } catch(e) { console.error('LocalStorage error', e); }
+                    loadReceiptHeader();
+                } catch(e) {
+                    console.error('LocalStorage error', e);
+                    loadReceiptHeader();
+                }
             },
 
             saveLocalStorage() {
@@ -769,6 +920,9 @@
                                     <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-gray-400"></i>
                                     <input type="text" id="order-search-input" value="${orderSearchQuery}" oninput="app.handleOrderSearch(this.value)" placeholder="Cari nama/ID/buku..." class="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-corp-primary outline-none">
                                 </div>
+                                <button onclick="app.openReceiptHeaderModal()" class="bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors flex items-center shadow border border-gray-300" title="Atur informasi header struk thermal">
+                                    <i class="ph ph-receipt mr-2 text-lg text-corp-primary"></i> Pengaturan Struk
+                                </button>
                                 <button onclick="app.exportToExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center shadow">
                                     <i class="ph ph-file-xls mr-2 text-lg"></i> Export Excel
                                 </button>
@@ -1156,79 +1310,122 @@
             printReceipt(orderId) {
                 const order = appData.orders.find(o => o.id === orderId);
                 if(!order) return;
-                
+
+                // Nama dokumen/dialog cetak: ID Transaksi - Pemesan
+                // Tetap gunakan data transaksi tanpa mengubah isi struk.
+                const sanitizePrintTitle = (value) => String(value ?? '')
+                    .replace(/[\\/:*?"<>|]/g, '-')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                const printDocumentTitle = `${sanitizePrintTitle(order.id)} - ${sanitizePrintTitle(order.customerName)}`;
+                document.title = printDocumentTitle || 'YKBUT Press';
+
                 const book = getBook(order.bookId);
                 const printArea = document.getElementById('print-area');
-                const sisaTagihan = order.totalPrice - (order.dpAmount || 0);
-                
+                if(!printArea) return;
+
+                const sisaTagihan = Math.max(0, Number(order.totalPrice || 0) - Number(order.dpAmount || 0));
+                const itemTotal = Number(order.qty || 0) * Number(order.unitPrice || 0);
+                const safe = (value) => String(value ?? '-')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+
+                const orderDate = order.date
+                    ? new Date(`${order.date}T00:00:00`).toLocaleDateString('id-ID')
+                    : '-';
+
                 let paymentInfoHtml = '';
                 if(order.paymentStatus === PAYMENT_STATUS.PAID) {
-                    paymentInfoHtml = `<div class="mt-2 text-center font-bold text-lg border-y border-dashed border-black py-1">L U N A S</div>`;
+                    paymentInfoHtml = `
+                        <div class="receipt-payment" style="margin-top:7px; text-align:center; font-weight:900; border-top:1px dashed #000; border-bottom:1px dashed #000; padding:5px 0;">
+                            L U N A S
+                        </div>`;
                 } else if(order.paymentStatus === PAYMENT_STATUS.DP) {
                     paymentInfoHtml = `
-                        <div class="flex justify-between text-xs mt-1">
-                            <span>Dibayar/DP</span>
-                            <span>${formatRupiah(order.dpAmount)}</span>
-                        </div>
-                        <div class="flex justify-between text-xs font-bold mt-1">
-                            <span>Sisa Tagihan</span>
-                            <span>${formatRupiah(sisaTagihan)}</span>
-                        </div>
-                    `;
+                        <div class="receipt-payment" style="margin-top:5px;">
+                            <div class="receipt-row"><span>Dibayar/DP</span><span>${safe(formatRupiah(order.dpAmount))}</span></div>
+                            <div class="receipt-row" style="font-weight:700; margin-top:3px;"><span>Sisa Tagihan</span><span>${safe(formatRupiah(sisaTagihan))}</span></div>
+                        </div>`;
                 } else {
-                    paymentInfoHtml = `<div class="mt-2 text-center font-bold text-base border-y border-dashed border-black py-1">BELUM DIBAYAR</div>`;
+                    paymentInfoHtml = `
+                        <div class="receipt-payment" style="margin-top:7px; text-align:center; font-weight:900; border-top:1px dashed #000; border-bottom:1px dashed #000; padding:5px 0;">
+                            BELUM DIBAYAR
+                        </div>`;
                 }
 
-                // Format Struk Thermal 80mm
+                const shippingInfoHtml = (order.status === ORDER_STATUS.SHIPPING || order.status === ORDER_STATUS.COMPLETED) && order.trackingNumber
+                    ? `
+                        <div class="receipt-small" style="margin-top:5px;">
+                            <div class="receipt-row"><span>${safe(order.shippingVendor || 'Ekspedisi')}</span><span>${safe(order.trackingNumber)}</span></div>
+                        </div>`
+                    : '';
+
+                // Format Struk Thermal 58mm. Area cetak efektif dibuat +/- 48mm agar aman
+                // untuk printer thermal 58mm yang umumnya memiliki margin fisik kiri/kanan.
                 printArea.innerHTML = `
-                    <div class="w-full mx-auto text-black print-bg-none" style="font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.4;">
-                        <div class="text-center mb-3 pb-2 border-b-2 border-dashed border-black">
-                            <h1 class="text-xl font-black uppercase leading-tight mb-1">YKBUT Press</h1>
-                            <p class="text-[10px]">Sistem Penerbitan & Pemesanan</p>
-                            <p class="text-[10px]">Jl. Raya Bekasi Km. 22</p>
+                    <div class="thermal-receipt print-bg-none receipt-no-break">
+                        <div style="text-align:center; margin-bottom:9px; padding-bottom:7px; border-bottom:1px dashed #000;">
+                            ${receiptHeader.title ? `<div class="receipt-title">${escapeHtml(receiptHeader.title)}</div>` : ''}
+                            ${receiptHeader.subtitle ? `<div class="receipt-small">${escapeHtml(receiptHeader.subtitle)}</div>` : ''}
+                            ${receiptHeader.address1 ? `<div class="receipt-small">${escapeHtml(receiptHeader.address1)}</div>` : ''}
+                            ${receiptHeader.address2 ? `<div class="receipt-small">${escapeHtml(receiptHeader.address2)}</div>` : ''}
+                            ${receiptHeader.phone ? `<div class="receipt-small">${escapeHtml(receiptHeader.phone)}</div>` : ''}
                         </div>
 
-                        <div class="mb-3 text-[11px]">
-                            <div class="flex justify-between"><span>No:</span> <span>${order.id}</span></div>
-                            <div class="flex justify-between"><span>Tgl:</span> <span>${new Date(order.date).toLocaleDateString('id-ID')}</span></div>
-                            <div class="mt-1">
-                                <p class="font-bold">Pemesan:</p>
-                                <p>${order.customerName}</p>
-                                <p>${order.customerPhone}</p>
+                        <div class="receipt-label" style="margin-bottom:9px;">
+                            <div class="receipt-row"><span>No:</span><span>${safe(order.id)}</span></div>
+                            <div class="receipt-row"><span>Tgl:</span><span>${safe(orderDate)}</span></div>
+                            <div style="margin-top:5px;">
+                                <div style="font-weight:700;">Pemesan:</div>
+                                <div>${safe(order.customerName)}</div>
+                                <div>${safe(order.customerPhone)}</div>
+                                ${order.customerAddress ? `<div class="receipt-address" style="margin-top:2px;">${safe(order.customerAddress)}</div>` : ''}
                             </div>
                         </div>
 
-                        <div class="border-b-2 border-dashed border-black pb-2 mb-2 text-[11px]">
-                            <div class="font-bold mb-1">${book ? book.title : 'Buku Terhapus'}</div>
-                            <div class="flex justify-between">
-                                <span>${order.qty} x ${formatRupiah(order.unitPrice)}</span>
-                                <span>${formatRupiah(order.qty * order.unitPrice)}</span>
+                        <div class="receipt-label" style="border-top:1px dashed #000; border-bottom:1px dashed #000; padding:7px 0; margin-bottom:7px;">
+                            <div class="receipt-book-title" style="margin-bottom:4px;">${safe(book ? book.title : 'Buku Terhapus')}</div>
+                            <div class="receipt-row">
+                                <span>${safe(order.qty)} x ${safe(formatRupiah(order.unitPrice))}</span>
+                                <span>${safe(formatRupiah(itemTotal))}</span>
                             </div>
-                            ${order.shippingCost > 0 ? `
-                            <div class="flex justify-between mt-1">
+                            ${Number(order.shippingCost || 0) > 0 ? `
+                            <div class="receipt-row" style="margin-top:4px;">
                                 <span>Ongkos Kirim</span>
-                                <span>${formatRupiah(order.shippingCost)}</span>
-                            </div>
-                            ` : ''}
+                                <span>${safe(formatRupiah(order.shippingCost))}</span>
+                            </div>` : ''}
                         </div>
 
-                        <div class="flex justify-between font-bold text-sm mb-1">
+                        <div class="receipt-row receipt-total" style="margin-bottom:3px;">
                             <span>TOTAL</span>
-                            <span>${formatRupiah(order.totalPrice)}</span>
+                            <span>${safe(formatRupiah(order.totalPrice))}</span>
                         </div>
-                        
-                        ${paymentInfoHtml}
 
-                        <div class="mt-4 pt-2 border-t-2 border-dashed border-black text-center text-[10px]">
-                            <p>Terima Kasih</p>
-                            <p>Telah Memesan di YKBUT Press</p>
+                        ${paymentInfoHtml}
+                        ${shippingInfoHtml}
+
+                        <div class="receipt-small" style="margin-top:10px; padding-top:7px; border-top:1px dashed #000; text-align:center;">
+                            <div>Terima Kasih</div>
+                            <div>Telah Memesan di YKBUT Press</div>
+                            <div style="margin-top:3px;">${safe(order.id)}</div>
                         </div>
                     </div>
                 `;
-                
-                setTimeout(() => {
-                    window.print();
-                }, 100);
+
+                // Tunggu satu frame agar browser selesai merender konten sebelum dialog print.
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        // Kembalikan judul aplikasi setelah dialog cetak ditutup.
+                        const restoreTitle = () => {
+                            document.title = 'YKBUT Press Order Management System';
+                        };
+                        window.addEventListener('afterprint', restoreTitle, { once: true });
+                        window.print();
+                    }, 80);
+                });
             },
 
             getFilteredBooks() {
@@ -1678,6 +1875,96 @@
                 showToast('Menyimpan perubahan ke Google Sheets...', 'info');
                 await apiService.sendAction('saveUser', targetUser);
                 showToast('Data pengguna berhasil diperbarui!', 'success');
+            },
+
+            openReceiptHeaderModal() {
+                const h = receiptHeader;
+                const modalHtml = `
+                    <div id="receipt-header-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 fade-in">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                            <div class="p-4 border-b border-gray-200 bg-gray-900 text-white flex justify-between items-center">
+                                <div>
+                                    <h3 class="font-bold text-lg flex items-center"><i class="ph ph-receipt text-xl mr-2 text-blue-400"></i> Pengaturan Header Struk</h3>
+                                    <p class="text-[11px] text-gray-400 mt-0.5">Khusus untuk cetak thermal 58 mm</p>
+                                </div>
+                                <button onclick="app.closeModal()" class="text-gray-400 hover:text-white transition"><i class="ph ph-x text-xl"></i></button>
+                            </div>
+
+                            <form id="receipt-header-form" onsubmit="app.saveReceiptHeader(event)" class="overflow-y-auto">
+                                <div class="p-6 space-y-4">
+                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 flex items-start">
+                                        <i class="ph ph-info text-lg mr-2 mt-0.5"></i>
+                                        <span>Informasi ini hanya mengatur tampilan bagian atas struk. Data transaksi, harga, pembayaran, dan fitur lainnya tetap menggunakan data yang sudah ada.</span>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Utama / Judul *</label>
+                                        <input type="text" id="receipt-header-title" value="${escapeHtml(h.title)}" required maxlength="40" placeholder="Contoh: YKBUT Press" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Subjudul / Deskripsi</label>
+                                        <input type="text" id="receipt-header-subtitle" value="${escapeHtml(h.subtitle)}" maxlength="55" placeholder="Contoh: Sistem Penerbitan & Pemesanan" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat Baris 1</label>
+                                        <input type="text" id="receipt-header-address1" value="${escapeHtml(h.address1)}" maxlength="55" placeholder="Contoh: Jl. Raya Bekasi Km. 22" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Alamat Baris 2 <span class="text-gray-400 font-normal">(opsional)</span></label>
+                                        <input type="text" id="receipt-header-address2" value="${escapeHtml(h.address2)}" maxlength="55" placeholder="Contoh: Bekasi, Jawa Barat" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Telepon / WhatsApp <span class="text-gray-400 font-normal">(opsional)</span></label>
+                                        <input type="text" id="receipt-header-phone" value="${escapeHtml(h.phone)}" maxlength="30" placeholder="Contoh: 021-12345678 | 0812xxxxxxx" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
+
+                                    <div class="border-t pt-4">
+                                        <p class="text-xs text-gray-500 flex items-center"><i class="ph ph-hard-drives mr-1.5"></i> Pengaturan tersimpan di browser ini dan akan digunakan setiap kali mencetak struk.</p>
+                                    </div>
+                                </div>
+
+                                <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+                                    <button type="button" onclick="app.resetReceiptHeader()" class="px-3 py-2 text-xs text-red-600 font-semibold hover:bg-red-50 rounded-lg transition">
+                                        <i class="ph ph-arrow-counter-clockwise mr-1"></i> Kembalikan Default
+                                    </button>
+                                    <div class="flex space-x-3">
+                                        <button type="button" onclick="app.closeModal()" class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition">Batal</button>
+                                        <button type="submit" class="px-4 py-2 bg-corp-primary text-white font-semibold rounded-lg hover:bg-blue-800 transition shadow flex items-center">
+                                            <i class="ph ph-floppy-disk mr-1.5"></i> Simpan Pengaturan
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('modal-root').innerHTML = modalHtml;
+            },
+
+            saveReceiptHeader(e) {
+                e.preventDefault();
+                receiptHeader = {
+                    title: document.getElementById('receipt-header-title').value.trim(),
+                    subtitle: document.getElementById('receipt-header-subtitle').value.trim(),
+                    address1: document.getElementById('receipt-header-address1').value.trim(),
+                    address2: document.getElementById('receipt-header-address2').value.trim(),
+                    phone: document.getElementById('receipt-header-phone').value.trim()
+                };
+
+                localStorage.setItem('ykbut_receipt_header', JSON.stringify(receiptHeader));
+                this.closeModal();
+                showToast('Header struk berhasil diperbarui!', 'success');
+            },
+
+            resetReceiptHeader() {
+                receiptHeader = { ...DEFAULT_RECEIPT_HEADER };
+                localStorage.removeItem('ykbut_receipt_header');
+                this.closeModal();
+                showToast('Header struk dikembalikan ke pengaturan default.', 'info');
             },
 
             openSheetConfigModal() {
