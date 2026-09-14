@@ -545,7 +545,25 @@
                     }
 
                     if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
-                    if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) mockUsers = serverData.users;
+                    if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) {
+                        // Google Sheets dapat mengembalikan angka (mis. 12345) sebagai Number,
+                        // sedangkan input password dari form browser selalu berupa String.
+                        // Normalisasi kredensial agar perbandingan login konsisten tanpa mengubah
+                        // password yang tersimpan di Spreadsheet.
+                        mockUsers = serverData.users.map(u => ({
+                            ...u,
+                            username: u.username == null ? '' : String(u.username),
+                            password: u.password == null ? '' : String(u.password)
+                        }));
+
+                        // Pertahankan akun bawaan admin sebagai fallback apabila sheet Users
+                        // belum memiliki akun admin. Password akun yang sudah ada di Spreadsheet
+                        // tidak pernah ditimpa oleh fallback ini.
+                        const hasAdmin = mockUsers.some(u => String(u.username || '').trim().toLowerCase() === 'admin');
+                        if (!hasAdmin) {
+                            mockUsers.unshift({ id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' });
+                        }
+                    }
 
                     this.saveLocalStorage();
 
@@ -595,22 +613,18 @@
 
             handleLogin(e) {
                 e.preventDefault();
-                const userVal = document.getElementById('login-username').value;
+                const userVal = document.getElementById('login-username').value.trim();
                 const passVal = document.getElementById('login-password').value;
                 const errorMsg = document.getElementById('login-error');
 
-                let foundUser = mockUsers.find(u => u.username.toLowerCase() === userVal.toLowerCase() && u.password === passVal);
-
-                // FORCE OVERRIDE LOGIN: 
-                // Jika gagal karena memori browser lama (cache), tapi user mengetik 'admin' & '12345', 
-                // kita paksa sistem untuk mengizinkan masuk dan me-reset password di cache lokal.
-                if (!foundUser && userVal.toLowerCase() === 'admin' && passVal === '12345') {
-                    foundUser = mockUsers.find(u => u.username.toLowerCase() === 'admin');
-                    if (foundUser) {
-                        foundUser.password = '12345'; // Update ke 12345 di runtime memori
-                        this.saveLocalStorage();      // Timpa password lama di LocalStorage
-                    }
-                }
+                // Input password HTML selalu berupa String. Data dari Google Sheets
+                // bisa berupa Number/String, sehingga keduanya dinormalisasi sebelum dibandingkan.
+                // Username dibuat case-insensitive dan password tetap case-sensitive.
+                const normalizedUsername = userVal.toLowerCase();
+                let foundUser = mockUsers.find(u =>
+                    String(u.username ?? '').trim().toLowerCase() === normalizedUsername &&
+                    String(u.password ?? '') === passVal
+                );
 
                 if (foundUser) {
                     currentUser = foundUser;
