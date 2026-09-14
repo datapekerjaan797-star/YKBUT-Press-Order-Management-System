@@ -204,6 +204,328 @@
             height: 260px;
             max-height: 320px;
         }
+
+
+        /* =========================================================
+         * Responsive UI/UX
+         * Desktop tetap menggunakan layout asli.
+         * Mobile: sidebar menjadi drawer, header lebih ringkas,
+         * kartu/form/modal/chart menyesuaikan layar.
+         * ========================================================= */
+        html, body {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        button, input, select, textarea {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button {
+            touch-action: manipulation;
+        }
+
+        input, select, textarea {
+            max-width: 100%;
+        }
+
+        #app-content {
+            min-width: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #app-content > * {
+            min-width: 0;
+        }
+
+        .responsive-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+
+        #mobile-menu-toggle,
+        #mobile-sidebar-overlay {
+            display: none;
+        }
+
+        @media (max-width: 767px) {
+            body {
+                height: 100dvh;
+                min-height: 100dvh;
+                overflow: hidden;
+            }
+
+            /* Sidebar menjadi drawer tanpa mengubah menu desktop. */
+            body > aside {
+                position: fixed;
+                inset: 0 auto 0 0;
+                width: min(82vw, 300px) !important;
+                height: 100dvh;
+                z-index: 60;
+                transform: translateX(-105%);
+                transition: transform .25s ease;
+                box-shadow: 12px 0 30px rgba(15, 23, 42, .22);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+
+            body.mobile-sidebar-open > aside {
+                transform: translateX(0);
+            }
+
+            #mobile-sidebar-overlay {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(15, 23, 42, .48);
+                z-index: 55;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity .25s ease;
+            }
+
+            body.mobile-sidebar-open #mobile-sidebar-overlay {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            body > aside nav {
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Area aplikasi utama memenuhi layar. */
+            body > div.flex-1.flex.flex-col {
+                width: 100%;
+                min-width: 0;
+                height: 100dvh;
+            }
+
+            header {
+                height: auto !important;
+                min-height: 64px;
+                padding: 10px 12px !important;
+                border-bottom-width: 3px !important;
+                flex-wrap: wrap;
+                gap: 8px;
+                padding-top: max(10px, env(safe-area-inset-top));
+            }
+
+            header > div:first-child {
+                width: 100%;
+                min-width: 0;
+                gap: 8px !important;
+            }
+
+            header > div:first-child > #page-title {
+                min-width: 0;
+                flex: 1 1 auto;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 16px !important;
+            }
+
+            #mobile-menu-toggle {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                flex: 0 0 40px;
+                width: 40px;
+                height: 40px;
+                border-radius: 10px;
+                background: #0F172A;
+                color: #fff;
+                font-size: 21px;
+                box-shadow: 0 2px 6px rgba(15,23,42,.15);
+            }
+
+            #sync-status-badge {
+                max-width: 55vw;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+                padding-left: 8px !important;
+                padding-right: 8px !important;
+            }
+
+            header > .header-actions {
+                width: 100%;
+                min-width: 0;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                display: flex;
+                gap: 8px;
+                padding-bottom: 2px;
+                scrollbar-width: none;
+            }
+
+            header > .header-actions::-webkit-scrollbar {
+                display: none;
+            }
+
+            header > .header-actions > button {
+                flex: 0 0 auto;
+                min-height: 38px;
+            }
+
+            header > .header-actions > span {
+                flex: 0 0 auto;
+                white-space: nowrap;
+                margin-left: 0 !important;
+                padding-left: 8px !important;
+            }
+
+            #app-content {
+                padding: 16px !important;
+                padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+            }
+
+            /* Dashboard */
+            #app-content .grid.grid-cols-1.sm\:grid-cols-2.lg\:grid-cols-5 {
+                grid-template-columns: 1fr !important;
+                gap: 12px !important;
+            }
+
+            #app-content .grid.grid-cols-1.lg\:grid-cols-2 {
+                grid-template-columns: 1fr !important;
+                gap: 16px !important;
+            }
+
+            #app-content .bg-white.rounded-xl.shadow-sm.border-l-4.p-6 {
+                padding: 16px !important;
+            }
+
+            #app-content h3 {
+                line-height: 1.25;
+            }
+
+            .chart-container {
+                height: 235px;
+                max-height: 260px;
+            }
+
+            #monthlyOrdersChart {
+                min-height: 225px;
+            }
+
+            /* Kartu ringkasan status tetap 2 kolom agar ringkas di HP. */
+            #app-content .grid.grid-cols-2.sm\:grid-cols-4 {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            /* Form tetap mengikuti breakpoint Tailwind, tetapi lebih nyaman disentuh. */
+            #app-content input,
+            #app-content select,
+            #app-content textarea,
+            #modal-root input,
+            #modal-root select,
+            #modal-root textarea {
+                font-size: 16px !important;
+            }
+
+            /* Tabel tidak dipaksa mengecil sampai sulit dibaca. Scroll horizontal. */
+            #app-content .overflow-x-auto {
+                overflow-x: auto !important;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            #app-content .overflow-x-auto table {
+                min-width: 900px;
+            }
+
+            /* Daftar kartu/elemen flex tidak menyebabkan horizontal overflow. */
+            #app-content .flex.justify-between.items-center {
+                min-width: 0;
+            }
+
+            #app-content .flex.justify-between.items-center > * {
+                min-width: 0;
+            }
+
+            /* Modal nyaman di layar kecil dan tetap dapat discroll. */
+            #modal-root > div {
+                padding: 12px !important;
+                align-items: center !important;
+            }
+
+            #modal-root > div > div {
+                width: 100% !important;
+                max-width: calc(100vw - 24px) !important;
+                max-height: calc(100dvh - 24px) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Modal konfigurasi yang memiliki konten panjang. */
+            #sheet-config-modal {
+                padding: 12px !important;
+            }
+
+            /* Login tetap proporsional pada HP. */
+            #login-screen {
+                padding: 16px;
+            }
+
+            #login-screen > div {
+                width: 100% !important;
+                max-width: 420px !important;
+                padding: 24px !important;
+            }
+
+            /* Toast tidak menutupi seluruh layar. */
+            #toast-container {
+                top: max(10px, env(safe-area-inset-top)) !important;
+                left: 12px !important;
+                right: 12px !important;
+            }
+
+            #toast-container > div {
+                max-width: 100% !important;
+            }
+        }
+
+        @media (min-width: 768px) {
+            #mobile-menu-toggle,
+            #mobile-sidebar-overlay {
+                display: none !important;
+            }
+        }
+
+
+
+        @media (max-width: 767px) and (orientation: landscape) {
+            header {
+                padding-top: 6px !important;
+                padding-bottom: 6px !important;
+            }
+            #app-content {
+                padding-top: 12px !important;
+            }
+            .chart-container {
+                height: 190px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            #app-content {
+                padding: 12px !important;
+            }
+
+            #app-content .bg-white.rounded-xl.shadow-sm.border-l-4.p-6 {
+                padding: 14px !important;
+            }
+
+            .chart-container {
+                height: 215px;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans h-screen flex overflow-hidden relative">
@@ -217,7 +539,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="logo YKBUT Press_2.jpeg" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -252,7 +574,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="logo YKBUT Press_2.jpeg" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -290,10 +612,14 @@
             </button>
         </div>
     </aside>
+    <div id="mobile-sidebar-overlay" onclick="app.closeMobileSidebar()" aria-hidden="true"></div>
 
     <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
         <header class="h-20 bg-white border-b-4 border-corp-primary shadow-sm flex items-center justify-between px-8 z-10">
             <div class="flex items-center space-x-4">
+                <button id="mobile-menu-toggle" type="button" onclick="app.toggleMobileSidebar()" aria-label="Buka menu navigasi" title="Menu navigasi">
+                    <i class="ph ph-list"></i>
+                </button>
                 <h2 class="text-xl font-bold text-gray-800 cursor-pointer hover:text-corp-primary transition" id="page-title" onclick="app.openSheetConfigModal()" title="Klik untuk Pengaturan Koneksi">Dashboard Analitik</h2>
                 <button onclick="app.openSheetConfigModal()" title="Klik untuk Diagnosa & Pengaturan Koneksi Spreadsheet" class="cursor-pointer">
                     <div id="sync-status-badge" class="flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition">
@@ -304,7 +630,7 @@
                 </button>
             </div>
             
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-3 header-actions">
                 <button onclick="app.openSheetConfigModal()" class="px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-corp-primary rounded-lg flex items-center transition border border-blue-200">
                     <i class="ph ph-wrench text-base mr-1.5"></i> Setup &amp; Diagnosa Sheets
                 </button>
@@ -773,7 +1099,27 @@
                 });
             },
 
+            toggleMobileSidebar() {
+                document.body.classList.toggle('mobile-sidebar-open');
+                const btn = document.getElementById('mobile-menu-toggle');
+                if (btn) {
+                    const open = document.body.classList.contains('mobile-sidebar-open');
+                    btn.setAttribute('aria-label', open ? 'Tutup menu navigasi' : 'Buka menu navigasi');
+                    btn.innerHTML = open ? '<i class="ph ph-x"></i>' : '<i class="ph ph-list"></i>';
+                }
+            },
+
+            closeMobileSidebar() {
+                document.body.classList.remove('mobile-sidebar-open');
+                const btn = document.getElementById('mobile-menu-toggle');
+                if (btn) {
+                    btn.setAttribute('aria-label', 'Buka menu navigasi');
+                    btn.innerHTML = '<i class="ph ph-list"></i>';
+                }
+            },
+
             navigate(view, param = null) {
+                this.closeMobileSidebar();
                 if (currentUser && currentUser.role === 'Viewer' && !['dashboard', 'orders'].includes(view)) {
                     view = 'dashboard';
                 }
@@ -876,7 +1222,8 @@
                 const countShipping = appData.orders.filter(o => o.status === ORDER_STATUS.SHIPPING).length;
                 const countCompleted = appData.orders.filter(o => o.status === ORDER_STATUS.COMPLETED).length;
 
-                // Ringkasan pemesanan bulanan: 12 bulan terakhir termasuk bulan berjalan.
+                // Ringkasan nilai transaksi bulanan: 12 bulan terakhir termasuk bulan berjalan.
+                // Jumlah batang tetap 12 bulan, tetapi metrik yang divisualisasikan hanya nilai transaksi.
                 const monthlyOrderData = [];
                 const now = new Date();
                 for (let i = 11; i >= 0; i--) {
@@ -884,13 +1231,25 @@
                     const year = d.getFullYear();
                     const month = d.getMonth();
                     const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
-                    const count = appData.orders.filter(o => {
-                        if (!o.date) return false;
+                    const value = appData.orders.reduce((sum, o) => {
+                        if (!o.date) return sum;
                         const od = new Date(`${o.date}T00:00:00`);
-                        return od.getFullYear() === year && od.getMonth() === month;
-                    }).length;
-                    monthlyOrderData.push({ label, count });
+                        if (od.getFullYear() !== year || od.getMonth() !== month) return sum;
+                        return sum + Number(o.totalPrice || 0);
+                    }, 0);
+                    monthlyOrderData.push({ label, value });
                 }
+
+                // Nilai transaksi berdasarkan status untuk pie/doughnut chart.
+                // Chart hanya menggunakan nilai rupiah, bukan jumlah pesanan.
+                const statusTransactionValue = [
+                    ORDER_STATUS.NEW,
+                    ORDER_STATUS.PROCESSED,
+                    ORDER_STATUS.SHIPPING,
+                    ORDER_STATUS.COMPLETED
+                ].map(status => appData.orders.reduce((sum, order) => {
+                    return sum + (order.status === status ? Number(order.totalPrice || 0) : 0);
+                }, 0));
 
                 const urlSet = !!getWebAppUrl();
 
@@ -1031,8 +1390,8 @@
                             data: {
                                 labels: monthlyOrderData.map(item => item.label),
                                 datasets: [{
-                                    label: 'Jumlah Pemesanan',
-                                    data: monthlyOrderData.map(item => item.count),
+                                    label: 'Nilai Transaksi',
+                                    data: monthlyOrderData.map(item => item.value),
                                     backgroundColor: '#2563EB',
                                     borderRadius: 6,
                                     borderSkipped: false
@@ -1043,10 +1402,17 @@
                                 maintainAspectRatio: false,
                                 plugins: {
                                     legend: { display: false },
-                                    tooltip: { callbacks: { label: (context) => ` ${context.raw} transaksi` } }
+                                    tooltip: { callbacks: { label: (context) => ` ${formatRupiah(context.raw)}` } }
                                 },
                                 scales: {
-                                    y: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, grid: { color: '#E5E7EB' } },
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            callback: (value) => formatRupiah(value),
+                                            precision: 0
+                                        },
+                                        grid: { color: '#E5E7EB' }
+                                    },
                                     x: { grid: { display: false } }
                                 }
                             }
@@ -1060,7 +1426,7 @@
                             data: {
                                 labels: ['Pesanan Baru', 'Diproses', 'Pengiriman', 'Selesai'],
                                 datasets: [{
-                                    data: [countNew, countProcessed, countShipping, countCompleted],
+                                    data: statusTransactionValue,
                                     backgroundColor: ['#1D4ED8', '#F59E0B', '#8B5CF6', '#10B981'],
                                     hoverOffset: 4,
                                     borderWidth: 0
@@ -1070,7 +1436,8 @@
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 plugins: {
-                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15 } }
+                                    legend: { position: 'bottom', labels: { boxWidth: 12, padding: 15 } },
+                                    tooltip: { callbacks: { label: (context) => ` ${formatRupiah(context.raw)}` } }
                                 },
                                 cutout: '65%'
                             }
