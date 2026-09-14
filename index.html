@@ -217,7 +217,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="logo YKBUT Press_2.jpeg" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -252,7 +252,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="logo YKBUT Press_2.jpeg" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -329,11 +329,17 @@
     <script>
         const SPREADSHEET_CONFIG = {
             TARGET_SHEET_ID: "115m5DYcwSiH6cEOkIBWgdsBG_59a6SPHyWj4V0EZqp8",
-            DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbxUz8zf_ZQa23U48EaGLNh9p1b1tVwNp4nmoaTNaBbri50PrYCOwdkBUI0d_UQ8o1Ke/exec"
+            DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwgtF-7VKmf9NYemPsxZ7C24BWi2TEUmIXdSnB0cioMjWf9YXuMk9yUmTeI1fVlaJq9/exec"
         };
 
         function getWebAppUrl() {
-            return (localStorage.getItem('ykbut_webapp_url') || SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL).trim();
+            // Deployment aktif YKBUT Press. URL ini diprioritaskan agar aplikasi
+            // tidak kembali menggunakan URL deployment lama yang tersimpan di browser.
+            const activeUrl = SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL;
+            if (localStorage.getItem('ykbut_webapp_url') !== activeUrl) {
+                localStorage.setItem('ykbut_webapp_url', activeUrl);
+            }
+            return activeUrl;
         }
 
         let mockUsers = [
@@ -471,53 +477,72 @@
         }
 
         const apiService = {
+            buildUrl(action) {
+                const targetUrl = getWebAppUrl();
+                if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) return null;
+                return targetUrl + (targetUrl.includes('?') ? '&' : '?') + 'action=' + encodeURIComponent(action) + '&_t=' + Date.now();
+            },
+            async fetchJson(url, options = {}) {
+                const response = await fetch(url, { redirect: 'follow', ...options });
+                const text = await response.text();
+                let data;
+                try { data = JSON.parse(text); } catch(e) { throw new Error('Respons Web App bukan JSON: ' + text.slice(0,180)); }
+                if (!response.ok) throw new Error('HTTP ' + response.status + ': ' + (data.message || 'Respons server tidak valid'));
+                return data;
+            },
             async fetchAll() {
                 try {
-                    const targetUrl = getWebAppUrl();
-                    if(!targetUrl || !targetUrl.startsWith('http')) {
-                        return { status: 'unconfigured', message: 'Web App URL belum dikonfigurasi.' };
-                    }
-
-                    const fetchUrl = targetUrl.includes('?') 
-                        ? `${targetUrl}&action=getAllData&_t=${Date.now()}`
-                        : `${targetUrl}?action=getAllData&_t=${Date.now()}`;
-
-                    const response = await fetch(fetchUrl, { method: 'GET', redirect: 'follow' });
-                    if (!response.ok) throw new Error(`HTTP ${response.status}: Respons server tidak valid`);
-                    return await response.json();
-                } catch (error) {
+                    const url = this.buildUrl('getAllData');
+                    if (!url) return { status:'unconfigured', message:'Web App URL belum dikonfigurasi.' };
+                    return await this.fetchJson(url, { method:'GET' });
+                } catch(error) {
                     console.warn('Sync warning:', error);
-                    return { status: 'error', message: error.message || 'Gagal terhubung ke Google Sheets' };
+                    return { status:'error', message:error.message || 'Gagal terhubung ke Google Sheets' };
                 }
             },
-
+            async diagnose() {
+                try {
+                    const url = this.buildUrl('diagnose');
+                    if (!url) return { status:'error', message:'Web App URL belum dikonfigurasi.' };
+                    return await this.fetchJson(url, { method:'GET' });
+                } catch(error) {
+                    return { status:'error', message:error.message || 'Diagnosa gagal' };
+                }
+            },
+            async sendRawAction(action, payload) {
+                const url = this.buildUrl(action);
+                if (!url) return { status:'offline', message:'URL Google Sheets belum diisi' };
+                return await this.fetchJson(url, {
+                    method:'POST', mode:'cors',
+                    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+                    body:JSON.stringify({ action, data:payload })
+                });
+            },
             async sendAction(action, payload) {
                 try {
-                    const targetUrl = getWebAppUrl();
-                    if(!targetUrl || !targetUrl.startsWith('http')) {
-                        return { status: 'offline', message: 'URL Google Sheets belum diisi' };
+                    if (action === 'saveOrder') {
+                        const setup = await this.sendRawAction('setupOrders', {});
+                        if (!setup || setup.status !== 'success') {
+                            return { status:'error', message:'Schema Orders gagal disiapkan: ' + (setup?.message || 'deployment Apps Script belum diperbarui') };
+                        }
                     }
-
-                    const postUrl = targetUrl.includes('?') 
-                        ? `${targetUrl}&action=${action}` 
-                        : `${targetUrl}?action=${action}`;
-
-                    const response = await fetch(postUrl, {
-                        method: 'POST',
-                        mode: 'cors',
-                        redirect: 'follow',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action, data: payload })
-                    });
-                    
-                    const text = await response.text();
-                    try { return JSON.parse(text); } catch (e) { return { status: 'success', raw: text }; }
-                } catch (error) {
-                    console.warn(`Action ${action} result:`, error);
-                    return { status: 'offline', message: 'Tersimpan secara lokal (Gagal koneksi server)' };
+                    return await this.sendRawAction(action, payload);
+                } catch(error) {
+                    console.warn('Action ' + action + ' result:', error);
+                    return { status:'offline', message:error.message || 'Gagal koneksi server' };
                 }
             }
         };
+
+        async function verifyOrderDateOnServer(orderId, expectedDate) {
+            try {
+                const data = await apiService.fetchAll();
+                if (!data || data.status !== 'success') return { ok:false, reason:'connection', data };
+                const found = Array.isArray(data.orders) ? data.orders.find(o => String(o.id) === String(orderId)) : null;
+                const actual = found && found.date != null ? String(found.date).trim().slice(0,10) : '';
+                return { ok:actual === String(expectedDate || '').trim().slice(0,10), actual, expected:expectedDate };
+            } catch(error) { return { ok:false, reason:'exception', error }; }
+        }
 
         const app = {
             currentView: 'dashboard',
@@ -642,9 +667,19 @@
                     saveOrderHistories();
 
                     // Backfill tanggal lokal ke Google Sheets setelah schema 'date' tersedia.
+                    // Ditunggu sampai selesai agar dashboard/refresh berikutnya membaca tanggal yang sama.
                     if (ordersNeedingDateBackfill.length > 0) {
-                        Promise.all(ordersNeedingDateBackfill.map(order => apiService.sendAction('saveOrder', order)))
-                            .catch(err => console.warn('Backfill tanggal pemesanan gagal:', err));
+                        try {
+                            const results = await Promise.all(ordersNeedingDateBackfill.map(order => apiService.sendAction('saveOrder', order)));
+                            const failed = results.filter(r => !r || r.status !== 'success');
+                            if (failed.length === 0) {
+                                showToast(`${ordersNeedingDateBackfill.length} tanggal pemesanan berhasil disinkronkan ke Google Sheets.`, 'success');
+                            } else {
+                                showToast('Sebagian tanggal belum berhasil dikirim ke Google Sheets. Periksa koneksi Sheets.', 'info');
+                            }
+                        } catch (err) {
+                            console.warn('Backfill tanggal pemesanan gagal:', err);
+                        }
                     }
 
                     if(badge) {
@@ -1416,9 +1451,18 @@
                 showToast('Mengirim update ke Google Sheets...', 'info');
                 const res = await apiService.sendAction('saveOrder', order);
                 if(res && res.status === 'success') {
-                    showToast('Status transaksi berhasil tersimpan di Google Sheets!', 'success');
+                    const verify = await verifyOrderDateOnServer(order.id, order.date);
+                    if (verify.ok) {
+                        showToast('Perubahan & tanggal pemesanan berhasil tersimpan di Google Sheets!', 'success');
+                    } else {
+                        const diag = await apiService.diagnose();
+                        console.error('Verifikasi tanggal gagal:', { verify, diag });
+                        if (diag?.status === 'success' && !diag.hasDateColumn) showToast('Kolom date belum tersedia pada deployment aktif.', 'error');
+                        else if (diag?.status === 'success' && diag.spreadsheetId !== SPREADSHEET_CONFIG.TARGET_SHEET_ID) showToast('Web App terhubung ke Spreadsheet yang berbeda.', 'error');
+                        else showToast('Tanggal belum terbaca kembali dari Google Sheets. Periksa deployment Web App.', 'error');
+                    }
                 } else {
-                    showToast('Perubahan tersimpan secara lokal (Google Sheets offline/tidak terhubung)', 'info');
+                    showToast('Google Sheets menolak penyimpanan: ' + (res?.message || 'deployment belum siap'), 'error');
                 }
             },
 
@@ -1614,7 +1658,15 @@
                     }
 
                     if(resOrder && resOrder.status === 'success') {
-                        showToast('Pesanan & update stok tersimpan di Google Sheets!', 'success');
+                        const verify = await verifyOrderDateOnServer(newOrder.id, newOrder.date);
+                        if (verify.ok) {
+                            showToast('Pesanan, tanggal & update stok tersimpan di Google Sheets!', 'success');
+                        } else {
+                            showToast('Pesanan tersimpan, tetapi tanggal belum terbaca dari Google Sheets. Periksa deployment Apps Script.', 'error');
+                            console.error('Verifikasi tanggal pesanan baru gagal:', verify);
+                        }
+                    } else {
+                        showToast('Pesanan tersimpan lokal, tetapi Google Sheets menolak: ' + (resOrder?.message || 'deployment belum siap'), 'error');
                     }
                 });
             },
@@ -2293,7 +2345,7 @@ function handleRequest(e) {
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = SpreadsheetApp.openById('115m5DYcwSiH6cEOkIBWgdsBG_59a6SPHyWj4V0EZqp8');
     var action = e && e.parameter ? e.parameter.action : null;
     var postData = null;
     if (e && e.postData && e.postData.contents) {
@@ -2305,7 +2357,12 @@ function handleRequest(e) {
     }
     var result = {};
     if (action === 'ping') {
-      result = { status: 'success', message: 'Koneksi Berhasil!' };
+      result = { status: 'success', message: 'Koneksi Berhasil!', spreadsheetId: ss.getId(), spreadsheetName: ss.getName() };
+    } else if (action === 'diagnose') {
+      ensureOrdersSchema(ss);
+      var diagSheet = ss.getSheetByName('Orders');
+      var diagHeaders = diagSheet ? diagSheet.getRange(1, 1, 1, diagSheet.getLastColumn()).getValues()[0].map(function(h){ return String(h).trim(); }) : [];
+      result = { status: 'success', spreadsheetId: ss.getId(), spreadsheetName: ss.getName(), ordersSheet: !!diagSheet, headers: diagHeaders, hasDateColumn: diagHeaders.indexOf('date') !== -1 };
     } else if (action === 'getAllData') {
       ensureOrdersSchema(ss);
       result = {
@@ -2318,8 +2375,12 @@ function handleRequest(e) {
       if (!postData) throw new Error('Data pesanan tidak ditemukan.');
       ensureOrdersSchema(ss);
       var sheet = ss.getSheetByName('Orders');
+      if (postData.date !== undefined && postData.date !== null && String(postData.date).trim() !== '') {
+        postData.date = String(postData.date).trim();
+      }
       upsertRowDynamic(sheet, 'id', postData.id, postData);
-      result = { status: 'success' };
+      SpreadsheetApp.flush();
+      result = { status: 'success', id: postData.id, date: postData.date || '' };
     } else if (action === 'setupOrders') {
       ensureOrdersSchema(ss);
       result = { status: 'success', message: 'Struktur Orders berhasil diperbarui. Kolom date tersedia.' };
@@ -2393,7 +2454,15 @@ function ensureOrdersSchema(ss) {
   });
 
   if (dateIndex === -1) {
-    var newCol = sheet.getLastColumn() + 1;
+    // Tambahkan date tepat setelah id agar schema mudah dibaca, tanpa menghapus data lama.
+    var idIndex = headers.indexOf('id');
+    var newCol;
+    if (idIndex !== -1) {
+      sheet.insertColumnAfter(idIndex + 1);
+      newCol = idIndex + 2;
+    } else {
+      newCol = sheet.getLastColumn() + 1;
+    }
     sheet.getRange(1, newCol).setValue('date');
     dateIndex = newCol - 1;
 
@@ -2506,6 +2575,7 @@ function deleteRowById(ss, sheetName, id) {
                                     <div class="flex space-x-2">
                                         <input type="text" id="input-webapp-url" value="${currentUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none font-mono text-xs">
                                         <button onclick="app.saveWebAppUrl()" class="px-4 py-2 bg-corp-primary text-white font-bold rounded-lg hover:bg-blue-800 transition">Simpan & Uji Koneksi</button>
+                                         <button onclick="app.runSheetDiagnostic()" class="px-3 py-2 bg-white text-gray-700 border border-gray-300 font-semibold rounded-lg hover:bg-gray-100 transition text-xs">Diagnosa</button>
                                     </div>
                                     <div id="diagnostic-result" class="mt-3 hidden p-3 rounded-lg text-xs font-mono"></div>
                                 </div>
@@ -2516,7 +2586,7 @@ function deleteRowById(ss, sheetName, id) {
                                         <li>Buka Google Spreadsheet Anda di atas, pilih menu <strong>Ekstensi (Extensions) &gt; Apps Script</strong>.</li>
                                         <li>Hapus kode bawaan di Apps Script, lalu <strong>salin dan tempelkan (paste) Kode Apps Script</strong> dari kotak di bawah ini. <span class="text-red-500 italic">*Kode ini sudah di-upgrade agar lebih kebal error.</span></li>
                                         <li>Klik ikon <strong>Disket (Simpan)</strong> di Apps Script.</li>
-                                        <li>Klik tombol <strong>Deploy (Terapkan) &gt; New deployment (Deployment Baru)</strong>:
+                                        <li>Buka <strong>Deploy &gt; Manage deployments</strong>. Pilih deployment Web App yang sedang dipakai, klik <strong>Edit</strong>, lalu pilih <strong>New version</strong>. Jika belum ada deployment Web App, buat deployment baru:
                                             <ul class="list-disc pl-4 mt-1 space-y-1 font-semibold text-gray-700">
                                                 <li>Pilih jenis (Type): <span class="text-blue-600">Web App</span></li>
                                                 <li>Execute as (Jalankan sebagai): <span class="text-blue-600">Me (Saya)</span></li>
@@ -2537,6 +2607,23 @@ function deleteRowById(ss, sheetName, id) {
                 document.getElementById('modal-root').innerHTML = modalHtml;
             },
 
+            async runSheetDiagnostic() {
+                const resultDiv = document.getElementById('diagnostic-result');
+                if (!resultDiv) return;
+                resultDiv.classList.remove('hidden');
+                resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200';
+                resultDiv.innerHTML = '<i class="ph ph-spinner animate-spin mr-1"></i> Menjalankan diagnosa deployment...';
+                const data = await apiService.diagnose();
+                if (data && data.status === 'success') {
+                    const correct = data.spreadsheetId === SPREADSHEET_CONFIG.TARGET_SHEET_ID && data.ordersSheet && data.hasDateColumn;
+                    resultDiv.className = correct ? 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200' : 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
+                    resultDiv.innerHTML = 'Deployment: <strong>' + (correct ? 'VALID' : 'PERLU DIPERBAIKI') + '</strong><br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + '<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Header: ' + (data.headers || []).join(', ');
+                } else {
+                    resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-red-50 text-red-700 border border-red-200';
+                    resultDiv.innerHTML = '<i class="ph ph-x-circle mr-1"></i> ' + String(data?.message || 'Deployment tidak dapat diakses').replace(/</g,'&lt;');
+                }
+            },
+
             saveWebAppUrl() {
                 const url = document.getElementById('input-webapp-url').value.trim();
                 localStorage.setItem('ykbut_webapp_url', url);
@@ -2548,21 +2635,20 @@ function deleteRowById(ss, sheetName, id) {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200';
                     resultDiv.innerHTML = '<i class="ph ph-spinner animate-spin mr-1"></i> Menguji koneksi dengan server Apps Script...';
                     
-                    fetch(url + (url.includes('?') ? '&' : '?') + 'action=ping')
+                    fetch(url + (url.includes('?') ? '&' : '?') + 'action=diagnose&_t=' + Date.now())
                         .then(res => res.json())
                         .then(data => {
-                            if(data.status === 'success') {
-                                resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200';
-                                resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> Koneksi Berhasil! Sistem siap terhubung ke Google Sheets.';
-                                showToast('Web App URL berhasil disimpan dan divalidasi.', 'success');
-                                this.syncFromSpreadsheet();
-                            } else {
-                                throw new Error('Invalid response');
-                            }
+                            if(data.status !== 'success') throw new Error(data.message || 'Deployment tidak mengembalikan status success');
+                            if(data.spreadsheetId !== SPREADSHEET_CONFIG.TARGET_SHEET_ID) throw new Error('Web App mengarah ke Spreadsheet ID berbeda: ' + (data.spreadsheetId || '-'));
+                            if(!data.ordersSheet || !data.hasDateColumn) throw new Error('Sheet Orders atau kolom date belum tersedia pada deployment aktif.');
+                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200';
+                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> Deployment aktif, Spreadsheet ID benar, sheet Orders tersedia, dan kolom date sudah tersedia.';
+                            showToast('Koneksi + schema Google Sheets tervalidasi.', 'success');
+                            this.syncFromSpreadsheet();
                         })
                         .catch(err => {
-                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
-                            resultDiv.innerHTML = '<i class="ph ph-warning mr-1"></i> URL tersimpan, namun pengujian gagal. Pastikan URL benar, disalin dari "Web App", dan aksesnya diatur ke "Anyone".';
+                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-red-50 text-red-700 border border-red-200';
+                            resultDiv.innerHTML = '<i class="ph ph-x-circle mr-1"></i> ' + String(err.message || err).replace(/</g,'&lt;');
                         });
                 } else {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-gray-50 text-gray-700 border border-gray-200';
