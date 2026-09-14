@@ -99,7 +99,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="logo YKBUT Press_2.jpeg" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -134,7 +134,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="logo YKBUT Press_2.jpeg" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -357,7 +357,42 @@
                 if(syncIcon) syncIcon.classList.remove('animate-spin');
 
                 if (serverData && serverData.status === 'success') {
-                    if (serverData.orders && Array.isArray(serverData.orders) && serverData.orders.length > 0) appData.orders = serverData.orders;
+                    
+                    // PENYELESAIAN MASALAH DATA BERGESER (AUTO-CORRECT)
+                    if (serverData.orders && Array.isArray(serverData.orders) && serverData.orders.length > 0) {
+                        appData.orders = serverData.orders.map(o => {
+                            const validOrderStatuses = Object.values(ORDER_STATUS);
+                            
+                            // Jika kolom 'paymentStatus' di JSON berisi 'Pesanan Baru', berarti data Google Sheets-nya masih pakai susunan lama 
+                            // dan tergeser akibat penambahan fitur Ongkir
+                            if (validOrderStatuses.includes(o.paymentStatus) && !isNaN(o.status) && o.status !== '') {
+                                const vals = Object.values(o);
+                                let extractedTracking = '';
+                                if(vals.length >= 15) extractedTracking = vals[vals.length - 1]; // Mengambil kolom terakhir yg tidak punya header
+
+                                return {
+                                    id: o.id,
+                                    date: o.date,
+                                    customerName: o.customerName,
+                                    customerPhone: o.customerPhone,
+                                    customerEmail: o.customerEmail,
+                                    customerAddress: o.customerAddress,
+                                    bookId: o.bookId,
+                                    qty: o.qty,
+                                    unitPrice: o.unitPrice,
+                                    shippingCost: parseFloat(o.totalPrice) || 0,     // Total Harga Lama -> Menjadi Ongkir
+                                    totalPrice: parseFloat(o.status) || 0,           // Status Lama -> Menjadi Total Harga
+                                    status: o.paymentStatus,                         // Pay Status Lama -> Menjadi Status
+                                    paymentStatus: o.dpAmount,                       // DP Lama -> Menjadi Pay Status
+                                    dpAmount: parseFloat(o.shippingVendor) || 0,     // Vendor Lama -> Menjadi DP
+                                    shippingVendor: o.trackingNumber,                // Resi Lama -> Menjadi Vendor
+                                    trackingNumber: extractedTracking                // Kolom kosong lama -> Menjadi Resi
+                                };
+                            }
+                            return o;
+                        });
+                    }
+
                     if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
                     if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) mockUsers = serverData.users;
 
@@ -1645,22 +1680,10 @@
                 showToast('Data pengguna berhasil diperbarui!', 'success');
             },
 
-            async deleteUser(userId) {
-                if(confirm('Apakah Anda yakin ingin menghapus pengguna ini?')) {
-                    mockUsers = mockUsers.filter(u => u.id !== userId);
-                    this.saveLocalStorage();
-                    this.renderUsers(document.getElementById('app-content'));
-                    
-                    showToast('Menghapus dari Google Sheets...', 'info');
-                    await apiService.sendAction('deleteUser', { id: userId });
-                    showToast('Pengguna berhasil dihapus!', 'success');
-                }
-            },
-
             openSheetConfigModal() {
                 const currentUrl = getWebAppUrl();
-                // Kode snippet Google Apps Script untuk copy-paste user (Diperbarui dengan kolom shippingCost)
-                const appsScriptCode = `// KODE GOOGLE APPS SCRIPT UNTUK SPREADSHEET (Copy-Paste ke Apps Script)
+                // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
+                const appsScriptCode = `// KODE GOOGLE APPS SCRIPT (Copy-Paste ke Apps Script & Lakukan New Deployment)
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -1689,21 +1712,23 @@ function handleRequest(e) {
         users: getSheetData(ss, 'Users')
       };
     } else if (action === 'saveOrder') {
-      var sheet = getOrCreateSheet(ss, 'Orders', ['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'shippingCost', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber']);
-      upsertRow(sheet, 'id', postData.id, [postData.id, postData.date, postData.customerName, postData.customerPhone, postData.customerEmail, postData.customerAddress, postData.bookId, postData.qty, postData.unitPrice, postData.shippingCost || 0, postData.totalPrice, postData.status, postData.paymentStatus, postData.dpAmount, postData.shippingVendor, postData.trackingNumber]);
+      var sheet = ss.getSheetByName('Orders');
+      if (!sheet) {
+        sheet = ss.insertSheet('Orders');
+        sheet.appendRow(['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'shippingCost', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber']);
+      }
+      upsertRowDynamic(sheet, 'id', postData.id, postData);
       result = { status: 'success' };
     } else if (action === 'deleteOrder') {
-      var sheet = ss.getSheetByName('Orders');
-      if (sheet) {
-        var data = sheet.getDataRange().getValues();
-        for (var i = data.length - 1; i >= 1; i--) {
-          if (String(data[i][0]) === String(postData.id)) sheet.deleteRow(i + 1);
-        }
-      }
+      deleteRowById(ss, 'Orders', postData.id);
       result = { status: 'success' };
     } else if (action === 'saveBook') {
-      var sheet = getOrCreateSheet(ss, 'Books', ['id', 'title', 'author', 'pages', 'category', 'costPrice', 'defaultPrice', 'margin', 'stock']);
-      upsertRow(sheet, 'id', postData.id, [postData.id, postData.title, postData.author, postData.pages, postData.category, postData.costPrice, postData.defaultPrice, postData.margin, postData.stock]);
+      var sheet = ss.getSheetByName('Books');
+      if(!sheet) {
+        sheet = ss.insertSheet('Books');
+        sheet.appendRow(['id', 'title', 'author', 'pages', 'category', 'costPrice', 'defaultPrice', 'margin', 'stock']);
+      }
+      upsertRowDynamic(sheet, 'id', postData.id, postData);
       result = { status: 'success' };
     } else if (action === 'deleteBooksBatch') {
       var sheet = ss.getSheetByName('Books');
@@ -1716,20 +1741,18 @@ function handleRequest(e) {
       }
       result = { status: 'success' };
     } else if (action === 'saveUser') {
-      var sheet = getOrCreateSheet(ss, 'Users', ['id', 'username', 'password', 'role', 'name']);
-      upsertRow(sheet, 'id', postData.id, [postData.id, postData.username, postData.password, postData.role, postData.name]);
+      var sheet = ss.getSheetByName('Users');
+      if(!sheet) {
+        sheet = ss.insertSheet('Users');
+        sheet.appendRow(['id', 'username', 'password', 'role', 'name']);
+      }
+      upsertRowDynamic(sheet, 'id', postData.id, postData);
       result = { status: 'success' };
     } else if (action === 'deleteUser') {
-      var sheet = ss.getSheetByName('Users');
-      if (sheet) {
-        var data = sheet.getDataRange().getValues();
-        for (var i = data.length - 1; i >= 1; i--) {
-          if (String(data[i][0]) === String(postData.id)) sheet.deleteRow(i + 1);
-        }
-      }
+      deleteRowById(ss, 'Users', postData.id);
       result = { status: 'success' };
     } else {
-      result = { status: 'error', message: 'Action tidak dikenal: ' + action };
+      result = { status: 'error', message: 'Action tidak dikenal' };
     }
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
@@ -1758,27 +1781,44 @@ function getSheetData(ss, sheetName) {
   return rows;
 }
 
-function getOrCreateSheet(ss, sheetName, headers) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    sheet.appendRow(headers);
-  }
-  return sheet;
-}
-
-function upsertRow(sheet, keyColumnName, keyValue, rowValues) {
+function upsertRowDynamic(sheet, keyColumnName, keyValue, rowValuesObj) {
   var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) { sheet.appendRow(rowValues); return; }
+  if (data.length <= 1 && data.length === 0) {
+      var newHeaders = Object.keys(rowValuesObj);
+      sheet.appendRow(newHeaders);
+      var newRow = newHeaders.map(function(h) { return rowValuesObj[h] !== undefined ? rowValuesObj[h] : ""; });
+      sheet.appendRow(newRow);
+      return;
+  }
+  
   var headers = data[0];
   var keyIndex = headers.indexOf(keyColumnName);
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][keyIndex]) === String(keyValue)) {
-      sheet.getRange(i + 1, 1, 1, rowValues.length).setValues([rowValues]);
-      return;
+  
+  var rowArray = headers.map(function(header) {
+      return rowValuesObj[header] !== undefined ? rowValuesObj[header] : "";
+  });
+
+  if (keyIndex !== -1 && data.length > 1) {
+      for (var r = 1; r < data.length; r++) {
+          if (String(data[r][keyIndex]) === String(keyValue)) {
+              sheet.getRange(r + 1, 1, 1, rowArray.length).setValues([rowArray]);
+              return;
+          }
+      }
+  }
+  sheet.appendRow(rowArray);
+}
+
+function deleteRowById(ss, sheetName, id) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (sheet) {
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var keyIndex = headers.indexOf('id');
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][keyIndex]) === String(id)) sheet.deleteRow(i + 1);
     }
   }
-  sheet.appendRow(rowValues);
 }`;
 
                 const modalHtml = `
@@ -1813,7 +1853,7 @@ function upsertRow(sheet, keyColumnName, keyValue, rowValues) {
                                     <h4 class="font-bold text-gray-800 text-base flex items-center"><i class="ph ph-list-numbers text-xl mr-2 text-corp-primary"></i> Panduan Hubungkan Ke Spreadsheet Anda (5 Langkah):</h4>
                                     <ol class="list-decimal pl-5 space-y-2 text-xs text-gray-600 leading-relaxed">
                                         <li>Buka Google Spreadsheet Anda di atas, pilih menu <strong>Ekstensi (Extensions) &gt; Apps Script</strong>.</li>
-                                        <li>Hapus kode bawaan di Apps Script, lalu <strong>salin dan tempelkan (paste) Kode Apps Script</strong> dari kotak di bawah ini. <span class="text-red-500 italic">*Kode ini sudah diperbarui untuk menampung kolom Ongkir.</span></li>
+                                        <li>Hapus kode bawaan di Apps Script, lalu <strong>salin dan tempelkan (paste) Kode Apps Script</strong> dari kotak di bawah ini. <span class="text-red-500 italic">*Kode ini sudah di-upgrade agar lebih kebal error.</span></li>
                                         <li>Klik ikon <strong>Disket (Simpan)</strong> di Apps Script.</li>
                                         <li>Klik tombol <strong>Deploy (Terapkan) &gt; New deployment (Deployment Baru)</strong>:
                                             <ul class="list-disc pl-4 mt-1 space-y-1 font-semibold text-gray-700">
