@@ -217,7 +217,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="logo YKBUT Press_2.jpeg" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -252,7 +252,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="logo YKBUT Press_2.jpeg" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -568,6 +568,11 @@
 
                 if (serverData && serverData.status === 'success') {
                     
+                    // Simpan referensi order lokal agar tanggal yang sudah diedit tidak hilang
+                    // ketika Spreadsheet lama belum memiliki kolom 'date'.
+                    const localOrdersById = new Map((appData.orders || []).map(o => [String(o.id), o]));
+                    const ordersNeedingDateBackfill = [];
+                    
                     // PENYELESAIAN MASALAH DATA BERGESER (AUTO-CORRECT)
                     if (serverData.orders && Array.isArray(serverData.orders) && serverData.orders.length > 0) {
                         appData.orders = serverData.orders.map(o => {
@@ -599,6 +604,14 @@
                                     trackingNumber: extractedTracking                // Kolom kosong lama -> Menjadi Resi
                                 };
                             }
+
+                            // Jika date belum ada/kosong di server, pertahankan tanggal lokal
+                            // berdasarkan ID transaksi lalu kirim kembali ke Spreadsheet.
+                            const localOrder = localOrdersById.get(String(o.id));
+                            if ((!o.date || String(o.date).trim() === '') && localOrder && localOrder.date) {
+                                o.date = localOrder.date;
+                                ordersNeedingDateBackfill.push(o);
+                            }
                             return o;
                         });
                     }
@@ -627,6 +640,12 @@
                     this.saveLocalStorage();
                     appData.orders.forEach(ensureOrderHistory);
                     saveOrderHistories();
+
+                    // Backfill tanggal lokal ke Google Sheets setelah schema 'date' tersedia.
+                    if (ordersNeedingDateBackfill.length > 0) {
+                        Promise.all(ordersNeedingDateBackfill.map(order => apiService.sendAction('saveOrder', order)))
+                            .catch(err => console.warn('Backfill tanggal pemesanan gagal:', err));
+                    }
 
                     if(badge) {
                         badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition";
@@ -2265,7 +2284,8 @@
             openSheetConfigModal() {
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
-                const appsScriptCode = `// KODE GOOGLE APPS SCRIPT (Copy-Paste ke Apps Script & Lakukan New Deployment)
+                const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
+// Versi: sinkronisasi tanggal pemesanan + migrasi schema Orders otomatis
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -2287,6 +2307,7 @@ function handleRequest(e) {
     if (action === 'ping') {
       result = { status: 'success', message: 'Koneksi Berhasil!' };
     } else if (action === 'getAllData') {
+      ensureOrdersSchema(ss);
       result = {
         status: 'success',
         orders: getSheetData(ss, 'Orders'),
@@ -2294,13 +2315,14 @@ function handleRequest(e) {
         users: getSheetData(ss, 'Users')
       };
     } else if (action === 'saveOrder') {
+      if (!postData) throw new Error('Data pesanan tidak ditemukan.');
+      ensureOrdersSchema(ss);
       var sheet = ss.getSheetByName('Orders');
-      if (!sheet) {
-        sheet = ss.insertSheet('Orders');
-        sheet.appendRow(['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'shippingCost', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber']);
-      }
       upsertRowDynamic(sheet, 'id', postData.id, postData);
       result = { status: 'success' };
+    } else if (action === 'setupOrders') {
+      ensureOrdersSchema(ss);
+      result = { status: 'success', message: 'Struktur Orders berhasil diperbarui. Kolom date tersedia.' };
     } else if (action === 'deleteOrder') {
       deleteRowById(ss, 'Orders', postData.id);
       result = { status: 'success' };
@@ -2342,6 +2364,62 @@ function handleRequest(e) {
   } finally { lock.releaseLock(); }
 }
 
+// Struktur canonical untuk sheet Orders. Kolom baru ditambahkan tanpa menggeser data lama.
+// Kolom 'date' adalah Tanggal Pemesanan yang dipakai aplikasi.
+function ensureOrdersSchema(ss) {
+  var sheet = ss.getSheetByName('Orders');
+  var requiredHeaders = ['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'shippingCost', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber'];
+
+  if (!sheet) {
+    sheet = ss.insertSheet('Orders');
+    sheet.appendRow(requiredHeaders);
+    return;
+  }
+
+  var range = sheet.getDataRange();
+  var data = range.getValues();
+  if (data.length === 0 || data[0].length === 0) {
+    sheet.clear();
+    sheet.appendRow(requiredHeaders);
+    return;
+  }
+
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+  var dateIndex = headers.indexOf('date');
+  var aliasIndex = -1;
+  ['tanggalPemesanan', 'Tanggal Pemesanan', 'tanggal_pemesanan'].some(function(alias) {
+    aliasIndex = headers.indexOf(alias);
+    return aliasIndex !== -1;
+  });
+
+  if (dateIndex === -1) {
+    var newCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, newCol).setValue('date');
+    dateIndex = newCol - 1;
+
+    // Migrasikan tanggal dari alias jika spreadsheet sudah pernah memakai nama tersebut.
+    if (aliasIndex !== -1 && data.length > 1) {
+      var values = data.slice(1).map(function(row) { return [row[aliasIndex] || '']; });
+      if (values.length) sheet.getRange(2, newCol, values.length, 1).setValues(values);
+    }
+  }
+
+  // Tambahkan header lain yang dibutuhkan aplikasi, tetapi jangan menghapus kolom tambahan.
+  headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function(h) { return String(h).trim(); });
+  requiredHeaders.forEach(function(header) {
+    if (headers.indexOf(header) === -1) {
+      sheet.getRange(1, sheet.getLastColumn() + 1).setValue(header);
+      headers.push(header);
+    }
+  });
+
+  // Format kolom date sebagai tanggal agar mudah dibaca di Google Sheets.
+  var finalDateIndex = headers.indexOf('date');
+  if (finalDateIndex !== -1 && sheet.getLastRow() > 1) {
+    sheet.getRange(2, finalDateIndex + 1, sheet.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd');
+  }
+}
+
 function getSheetData(ss, sheetName) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
@@ -2354,7 +2432,7 @@ function getSheetData(ss, sheetName) {
     for (var j = 0; j < headers.length; j++) {
       var val = data[i][j];
       if (val instanceof Date) {
-        val = Utilities.formatDate(val, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+        val = Utilities.formatDate(val, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
       }
       rowObj[headers[j]] = val;
     }
@@ -2365,28 +2443,27 @@ function getSheetData(ss, sheetName) {
 
 function upsertRowDynamic(sheet, keyColumnName, keyValue, rowValuesObj) {
   var data = sheet.getDataRange().getValues();
-  if (data.length <= 1 && data.length === 0) {
-      var newHeaders = Object.keys(rowValuesObj);
-      sheet.appendRow(newHeaders);
-      var newRow = newHeaders.map(function(h) { return rowValuesObj[h] !== undefined ? rowValuesObj[h] : ""; });
-      sheet.appendRow(newRow);
-      return;
+  if (data.length === 0 || data[0].length === 0) {
+    var newHeaders = Object.keys(rowValuesObj);
+    sheet.appendRow(newHeaders);
+    var newRow = newHeaders.map(function(h) { return rowValuesObj[h] !== undefined ? rowValuesObj[h] : ''; });
+    sheet.appendRow(newRow);
+    return;
   }
-  
+
   var headers = data[0];
   var keyIndex = headers.indexOf(keyColumnName);
-  
   var rowArray = headers.map(function(header) {
-      return rowValuesObj[header] !== undefined ? rowValuesObj[header] : "";
+    return rowValuesObj[header] !== undefined ? rowValuesObj[header] : '';
   });
 
   if (keyIndex !== -1 && data.length > 1) {
-      for (var r = 1; r < data.length; r++) {
-          if (String(data[r][keyIndex]) === String(keyValue)) {
-              sheet.getRange(r + 1, 1, 1, rowArray.length).setValues([rowArray]);
-              return;
-          }
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][keyIndex]) === String(keyValue)) {
+        sheet.getRange(r + 1, 1, 1, rowArray.length).setValues([rowArray]);
+        return;
       }
+    }
   }
   sheet.appendRow(rowArray);
 }
@@ -2395,13 +2472,15 @@ function deleteRowById(ss, sheetName, id) {
   var sheet = ss.getSheetByName(sheetName);
   if (sheet) {
     var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return;
     var headers = data[0];
     var keyIndex = headers.indexOf('id');
+    if (keyIndex === -1) return;
     for (var i = data.length - 1; i >= 1; i--) {
       if (String(data[i][keyIndex]) === String(id)) sheet.deleteRow(i + 1);
     }
   }
-}`;
+}`
 
                 const modalHtml = `
                     <div id="sheet-config-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 fade-in">
