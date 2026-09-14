@@ -736,12 +736,21 @@
             saveOrderHistories();
         };
 
+        const DEFAULT_LOYALTY_SETTINGS = {
+            defaultDiscountPercent: 0,
+            maxDiscountPercent: 20,
+            rupiahPerPoint: 10000,
+            pointValue: 100,
+            pointsRedemptionEnabled: true
+        };
+
         let appData = {
             orders: [
                 { id: 'ORD-001', date: '2026-09-10', customerName: 'PT. Andalan Maju', customerPhone: '08123456789', customerEmail: 'info@andalan.co.id', customerAddress: 'Jl. Sudirman No 1, Jakarta Pusat', bookId: 'B001', qty: 10, unitPrice: 150000, shippingCost: 50000, totalPrice: 1550000, status: ORDER_STATUS.COMPLETED, paymentStatus: PAYMENT_STATUS.PAID, dpAmount: 1550000, shippingVendor: 'JNE', trackingNumber: 'JNE1234567890' },
                 { id: 'ORD-002', date: '2026-09-11', customerName: 'Budi Santoso', customerPhone: '08987654321', customerEmail: 'budi.s@gmail.com', customerAddress: 'Komp. Harapan Jaya, Bekasi', bookId: 'B003', qty: 2, unitPrice: 90000, shippingCost: 0, totalPrice: 180000, status: ORDER_STATUS.NEW, paymentStatus: PAYMENT_STATUS.UNPAID, dpAmount: 0, shippingVendor: '', trackingNumber: '' },
                 { id: 'ORD-003', date: '2026-09-11', customerName: 'CV. Bangun Konstruksi', customerPhone: '08112233445', customerEmail: 'procurement@bangun.com', customerAddress: 'Kawasan Industri Cikarang Blok C2', bookId: 'B005', qty: 5, unitPrice: 170000, shippingCost: 20000, totalPrice: 870000, status: ORDER_STATUS.PROCESSED, paymentStatus: PAYMENT_STATUS.DP, dpAmount: 400000, shippingVendor: '', trackingNumber: '' },
-            ]
+            ],
+            settings: { ...DEFAULT_LOYALTY_SETTINGS }
         };
 
         let currentUser = null;
@@ -758,6 +767,45 @@
             return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID');
         };
         const getBook = (id) => mockBooks.find(b => b.id === id);
+
+        const generateCustomerId = (seed) => {
+            const text = String(seed || '').trim().toUpperCase();
+            if (!text) return 'CUST-001';
+            let hash = 0;
+            for (let i = 0; i < text.length; i++) hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+            return 'CUST-' + String(Math.abs(hash) % 999999).padStart(6, '0');
+        };
+
+        const getCustomerProfiles = () => {
+            const map = new Map();
+            (appData.orders || []).forEach(order => {
+                const customerId = String(order.customerId || generateCustomerId(order.customerPhone || order.customerName));
+                if (!map.has(customerId)) {
+                    map.set(customerId, { id: customerId, name: order.customerName || '', phone: order.customerPhone || '', email: order.customerEmail || '', address: order.customerAddress || '', points: 0, totalSpent: 0, transactions: 0 });
+                }
+                const c = map.get(customerId);
+                c.name = order.customerName || c.name;
+                c.phone = order.customerPhone || c.phone;
+                c.email = order.customerEmail || c.email;
+                c.address = order.customerAddress || c.address;
+                c.totalSpent += Number(order.totalPrice || 0);
+                c.transactions += 1;
+            });
+            map.forEach(c => {
+                const earned = Math.floor(c.totalSpent / Math.max(1, Number(appData.settings?.rupiahPerPoint || DEFAULT_LOYALTY_SETTINGS.rupiahPerPoint)));
+                const used = (appData.orders || []).filter(o => String(o.customerId || generateCustomerId(o.customerPhone || o.customerName)) === String(c.id)).reduce((sum, o) => sum + Math.max(0, Number(o.pointsUsed || 0)), 0);
+                c.points = Math.max(0, earned - used);
+            });
+            return Array.from(map.values()).sort((a,b) => String(a.name).localeCompare(String(b.name), 'id'));
+        };
+
+        const getCustomerById = (id) => getCustomerProfiles().find(c => String(c.id) === String(id));
+
+        const getNextCustomerId = () => {
+            const ids = getCustomerProfiles().map(c => String(c.id || '')).filter(id => /^CUST-\d+$/i.test(id));
+            const max = ids.reduce((m, id) => Math.max(m, parseInt(id.split('-')[1], 10) || 0), 0);
+            return 'CUST-' + String(max + 1).padStart(6, '0');
+        };
 
         // Pengaturan header struk thermal. Disimpan di browser agar tidak mengubah
         // struktur data Orders/Books/Users di Google Sheets.
@@ -846,7 +894,7 @@
             },
             async sendAction(action, payload) {
                 try {
-                    if (action === 'saveOrder') {
+                    if (action === 'saveOrder' || action === 'saveSettings') {
                         const setup = await this.sendRawAction('setupOrders', {});
                         if (!setup || setup.status !== 'success') {
                             return { status:'error', message:'Schema Orders gagal disiapkan: ' + (setup?.message || 'deployment Apps Script belum diperbarui') };
@@ -884,10 +932,12 @@
                     const savedOrders = localStorage.getItem('ykbut_orders');
                     const savedBooks = localStorage.getItem('ykbut_books');
                     const savedUsers = localStorage.getItem('ykbut_users');
+                    const savedSettings = localStorage.getItem('ykbut_loyalty_settings');
 
                     if (savedOrders) appData.orders = JSON.parse(savedOrders);
                     if (savedBooks) mockBooks = JSON.parse(savedBooks);
                     if (savedUsers) mockUsers = JSON.parse(savedUsers);
+                    if (savedSettings) appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...JSON.parse(savedSettings) };
                     loadReceiptHeader();
                     loadOrderHistories();
                 } catch(e) {
@@ -901,6 +951,7 @@
                     localStorage.setItem('ykbut_orders', JSON.stringify(appData.orders));
                     localStorage.setItem('ykbut_books', JSON.stringify(mockBooks));
                     localStorage.setItem('ykbut_users', JSON.stringify(mockUsers));
+                    localStorage.setItem('ykbut_loyalty_settings', JSON.stringify(appData.settings || DEFAULT_LOYALTY_SETTINGS));
                 } catch(e) { console.error('LocalStorage save error', e); }
             },
 
@@ -968,6 +1019,10 @@
                     }
 
                     if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
+                    if (serverData.settings && typeof serverData.settings === 'object') {
+                        appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...serverData.settings };
+                    }
+
                     if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) {
                         // Google Sheets dapat mengembalikan angka (mis. 12345) sebagai Number,
                         // sedangkan input password dari form browser selalu berupa String.
@@ -1482,6 +1537,7 @@
                         </td>
                         <td class="py-3 px-4 text-sm text-gray-600">
                             <p class="font-bold text-gray-800">${order.customerName}</p>
+                            <p class="text-[10px] text-corp-primary font-semibold">${order.customerId || generateCustomerId(order.customerPhone || order.customerName)}</p>
                             <p class="text-xs text-gray-500">${order.customerPhone}</p>
                         </td>
                         <td class="py-3 px-4 text-sm text-gray-600 max-w-xs truncate" title="${bookTitle}">${bookTitle} <br><span class="text-xs font-bold text-gray-400">Qty: ${order.qty}</span></td>
@@ -1846,6 +1902,18 @@
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Tanggal Pemesanan *</label>
                                         <input type="date" id="order-date" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
                                     </div>
+                                    <div class="md:col-span-2 bg-blue-50 border border-blue-100 rounded-lg p-3">
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Customer ID / Riwayat Customer</label>
+                                        <select id="customer-history-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-corp-primary outline-none">
+                                            <option value="">-- Customer Baru --</option>
+                                            ${getCustomerProfiles().map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.id)} • ${escapeHtml(c.name)} • ${escapeHtml(c.phone || '-')}</option>`).join('')}
+                                        </select>
+                                        <p id="customer-points-info" class="text-xs text-blue-700 mt-2">Pilih customer lama untuk menarik data historis dan saldo poin.</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Customer ID *</label>
+                                        <input type="text" id="cust-id" required readonly placeholder="CUST-001" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
                                     <div>
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Pemesan *</label>
                                         <input type="text" id="cust-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
@@ -1909,6 +1977,23 @@
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Nominal DP (Rp)</label>
                                         <input type="number" id="pay-dp" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
                                     </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Diskon (%)</label>
+                                        <input type="number" id="pay-discount-percent" min="0" max="${Number(appData.settings?.maxDiscountPercent || 0)}" step="0.01" value="${Number(appData.settings?.defaultDiscountPercent || 0)}" ${currentUser?.role === 'Administrator' ? '' : 'readonly'} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition ${currentUser?.role === 'Administrator' ? 'bg-white' : 'bg-gray-100'}">
+                                        <p class="text-[10px] text-gray-400 mt-1">Batas maksimum: ${Number(appData.settings?.maxDiscountPercent || 0)}%</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Gunakan Poin</label>
+                                        <input type="number" id="pay-points-used" min="0" value="0" ${appData.settings?.pointsRedemptionEnabled ? '' : 'disabled'} class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition ${appData.settings?.pointsRedemptionEnabled ? 'bg-white' : 'bg-gray-100'}">
+                                        <p id="available-points-info" class="text-[10px] text-gray-400 mt-1">Saldo poin: 0</p>
+                                    </div>
+                                </div>
+                                <div class="mt-4 bg-white border border-gray-200 rounded-lg p-4">
+                                    <div class="flex justify-between text-sm text-gray-600"><span>Subtotal</span><strong id="label-subtotal">Rp 0</strong></div>
+                                    <div class="flex justify-between text-sm text-gray-600 mt-1"><span>Diskon</span><strong id="label-discount">Rp 0</strong></div>
+                                    <div class="flex justify-between text-sm text-gray-600 mt-1"><span>Potongan Poin</span><strong id="label-points-discount">Rp 0</strong></div>
+                                    <div class="flex justify-between text-lg font-bold text-gray-800 mt-2 pt-2 border-t"><span>Total Bayar</span><span id="label-payment-total">Rp 0</span></div>
+                                    <div class="text-xs text-green-700 mt-2">Poin diperoleh dari transaksi ini: <strong id="label-points-earned">0</strong> poin</div>
                                 </div>
                             </div>
 
@@ -1934,13 +2019,68 @@
                 const containerDp = document.getElementById('dp-input-container');
                 const inputDp = document.getElementById('pay-dp');
 
+                const customerSelect = document.getElementById('customer-history-select');
+                const customerIdInput = document.getElementById('cust-id');
+                const discountInput = document.getElementById('pay-discount-percent');
+                const pointsInput = document.getElementById('pay-points-used');
+                const pointsInfo = document.getElementById('available-points-info');
+                const customerPointsInfo = document.getElementById('customer-points-info');
                 const calculateTotal = () => {
                     const price = parseFloat(inputPrice.value) || 0;
                     const qty = parseInt(inputQty.value) || 0;
                     const shipping = parseFloat(inputShipping.value) || 0;
-                    const total = (price * qty) + shipping;
+                    const subtotal = (price * qty) + shipping;
+                    const maxDiscount = Number(appData.settings?.maxDiscountPercent || 0);
+                    let discountPercent = Math.max(0, Number(discountInput?.value || 0));
+                    if (discountPercent > maxDiscount) { discountPercent = maxDiscount; if (discountInput) discountInput.value = discountPercent; }
+                    const discountAmount = Math.min(subtotal, subtotal * discountPercent / 100);
+                    const customer = getCustomerById(customerIdInput?.value);
+                    const availablePoints = customer ? Number(customer.points || 0) : 0;
+                    let pointsUsed = Math.max(0, parseInt(pointsInput?.value || 0) || 0);
+                    pointsUsed = Math.min(pointsUsed, availablePoints);
+                    const pointValue = Number(appData.settings?.pointValue || 0);
+                    const pointsDiscount = Math.min(Math.max(0, subtotal - discountAmount), pointsUsed * pointValue);
+                    const total = Math.max(0, subtotal - discountAmount - pointsDiscount);
+                    const pointsEarned = Math.floor(total / Math.max(1, Number(appData.settings?.rupiahPerPoint || 10000)));
                     labelTotal.innerText = formatRupiah(total);
+                    document.getElementById('label-subtotal').innerText = formatRupiah(subtotal);
+                    document.getElementById('label-discount').innerText = formatRupiah(discountAmount);
+                    document.getElementById('label-points-discount').innerText = formatRupiah(pointsDiscount);
+                    document.getElementById('label-payment-total').innerText = formatRupiah(total);
+                    document.getElementById('label-points-earned').innerText = pointsEarned.toLocaleString('id-ID');
+                    if (pointsInfo) pointsInfo.innerText = `Saldo poin: ${availablePoints.toLocaleString('id-ID')} • 1 poin = ${formatRupiah(pointValue)}`;
+                    return { subtotal, discountPercent, discountAmount, pointsUsed, pointsDiscount, total, pointsEarned, availablePoints };
                 };
+
+                const applyCustomer = (id) => {
+                    const customer = getCustomerById(id);
+                    if (!customer) {
+                        if (customerPointsInfo) customerPointsInfo.innerText = 'Customer baru. ID akan digunakan untuk histori transaksi berikutnya.';
+                        calculateTotal();
+                        return;
+                    }
+                    customerIdInput.value = customer.id;
+                    document.getElementById('cust-name').value = customer.name || '';
+                    document.getElementById('cust-phone').value = customer.phone || '';
+                    document.getElementById('cust-email').value = customer.email || '';
+                    document.getElementById('cust-address').value = customer.address || '';
+                    if (customerPointsInfo) customerPointsInfo.innerText = `${customer.id} • ${customer.transactions} transaksi • saldo ${customer.points.toLocaleString('id-ID')} poin • total belanja ${formatRupiah(customer.totalSpent)}`;
+                    calculateTotal();
+                };
+
+                // Customer ID untuk customer baru selalu dibuat otomatis dan readonly.
+                // Untuk customer lama, ID mengikuti histori customer yang dipilih.
+                if (customerIdInput && !customerSelect?.value) customerIdInput.value = getNextCustomerId();
+                customerSelect?.addEventListener('change', e => {
+                    if (e.target.value) {
+                        applyCustomer(e.target.value);
+                    } else if (customerIdInput) {
+                        customerIdInput.value = getNextCustomerId();
+                        if (customerPointsInfo) customerPointsInfo.innerText = 'Customer baru. ID dibuat otomatis dan akan dikunci saat tersimpan.';
+                        calculateTotal();
+                    }
+                });
+
 
                 selectBook.addEventListener('change', (e) => {
                     const selectedOption = e.target.options[e.target.selectedIndex];
@@ -1956,6 +2096,8 @@
                 inputPrice.addEventListener('input', calculateTotal);
                 inputQty.addEventListener('input', calculateTotal);
                 inputShipping.addEventListener('input', calculateTotal);
+                discountInput?.addEventListener('input', calculateTotal);
+                pointsInput?.addEventListener('input', calculateTotal);
 
                 selectPay.addEventListener('change', (e) => {
                     if(e.target.value === PAYMENT_STATUS.DP) {
@@ -1974,16 +2116,40 @@
                     const price = parseFloat(inputPrice.value) || 0;
                     const qty = parseInt(inputQty.value) || 1;
                     const shipping = parseFloat(inputShipping.value) || 0;
-                    const total = (price * qty) + shipping;
+                    const calc = calculateTotal();
+                    const total = calc.total;
                     const pStatus = selectPay.value;
                     let dp = 0;
-                    
-                    if(pStatus === PAYMENT_STATUS.DP) dp = parseFloat(inputDp.value) || 0;
+                    if(pStatus === PAYMENT_STATUS.DP) dp = Math.min(total, parseFloat(inputDp.value) || 0);
                     else if(pStatus === PAYMENT_STATUS.PAID) dp = total;
+
+                    let customerId = String(customerIdInput.value || '').trim();
+                    const isExistingCustomer = !!customerSelect.value;
+                    if (isExistingCustomer) {
+                        const existingCustomer = getCustomerById(customerSelect.value);
+                        if (!existingCustomer) { showToast('Data customer tidak ditemukan. Silakan pilih ulang.', 'error'); return; }
+                        customerId = existingCustomer.id;
+                    } else {
+                        // Reservasi ID dilakukan di server dengan LockService agar dua perangkat
+                        // yang membuat customer baru bersamaan tetap memperoleh ID berbeda.
+                        showToast('Membuat Customer ID unik...', 'info');
+                        const reserved = await apiService.sendAction('reserveCustomerId', {
+                            customerName: document.getElementById('cust-name').value,
+                            customerPhone: document.getElementById('cust-phone').value,
+                            customerEmail: document.getElementById('cust-email').value
+                        });
+                        if (!reserved || reserved.status !== 'success' || !reserved.customerId) {
+                            showToast('Customer ID gagal dibuat. Pesanan tidak disimpan.', 'error');
+                            return;
+                        }
+                        customerId = reserved.customerId;
+                        customerIdInput.value = customerId;
+                    }
 
                     const newOrder = {
                         id: `ORD-${String(appData.orders.length + 1).padStart(3, '0')}`,
                         date: document.getElementById('order-date').value || todayISO(),
+                        customerId: customerId,
                         customerName: document.getElementById('cust-name').value,
                         customerPhone: document.getElementById('cust-phone').value,
                         customerEmail: document.getElementById('cust-email').value,
@@ -1992,6 +2158,12 @@
                         qty: qty,
                         unitPrice: price,
                         shippingCost: shipping,
+                        subtotal: calc.subtotal,
+                        discountPercent: calc.discountPercent,
+                        discountAmount: calc.discountAmount,
+                        pointsUsed: calc.pointsUsed,
+                        pointsDiscount: calc.pointsDiscount,
+                        pointsEarned: calc.pointsEarned,
                         totalPrice: total,
                         status: ORDER_STATUS.NEW,
                         paymentStatus: pStatus,
@@ -2111,6 +2283,7 @@
                             <div style="margin-top:5px;">
                                 <div style="font-weight:700;">Pemesan:</div>
                                 <div>${safe(order.customerName)}</div>
+                                <div>${safe(order.customerId || generateCustomerId(order.customerPhone || order.customerName))}</div>
                                 <div>${safe(order.customerPhone)}</div>
                                 ${order.customerAddress ? `<div class="receipt-address" style="margin-top:2px;">${safe(order.customerAddress)}</div>` : ''}
                             </div>
@@ -2504,9 +2677,14 @@
                                 <h3 class="text-lg font-bold text-gray-800">Daftar Pengguna Sistem</h3>
                                 <p class="text-xs text-gray-500">Atur kredensial dan hak akses (Administrator / Staff / Viewer).</p>
                             </div>
-                            <button onclick="app.openUserModal()" class="bg-corp-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors flex items-center shadow-md">
-                                <i class="ph ph-user-plus mr-2 text-lg"></i> Tambah User Baru
-                            </button>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="app.openLoyaltySettingsModal()" class="bg-white text-corp-primary border border-blue-200 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors flex items-center shadow-sm">
+                                    <i class="ph ph-sliders-horizontal mr-2 text-lg"></i> Pengaturan Diskon & Poin
+                                </button>
+                                <button onclick="app.openUserModal()" class="bg-corp-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-800 transition-colors flex items-center shadow-md">
+                                    <i class="ph ph-user-plus mr-2 text-lg"></i> Tambah User Baru
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -2525,6 +2703,53 @@
                         </div>
                     </div>
                 `;
+            },
+
+            openLoyaltySettingsModal() {
+                if (!currentUser || currentUser.role !== 'Administrator') return;
+                const cfg = { ...DEFAULT_LOYALTY_SETTINGS, ...(appData.settings || {}) };
+                const modalHtml = `
+                    <div id="loyalty-modal-backdrop" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 fade-in">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+                            <form id="form-loyalty-settings" onsubmit="app.saveLoyaltySettings(event)">
+                                <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                                    <div><h3 class="font-bold text-lg text-gray-800">Pengaturan Diskon & Poin</h3><p class="text-xs text-gray-500 mt-1">Pengaturan ini berlaku untuk transaksi baru.</p></div>
+                                    <button type="button" onclick="app.closeModal()" class="text-gray-500 hover:text-red-500 transition"><i class="ph ph-x text-xl"></i></button>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label class="block text-sm font-semibold text-gray-700 mb-1">Diskon Default (%)</label><input type="number" id="setting-default-discount" min="0" max="100" step="0.01" value="${Number(cfg.defaultDiscountPercent || 0)}" class="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-corp-primary"></div>
+                                        <div><label class="block text-sm font-semibold text-gray-700 mb-1">Maksimum Diskon (%)</label><input type="number" id="setting-max-discount" min="0" max="100" step="0.01" value="${Number(cfg.maxDiscountPercent || 0)}" class="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-corp-primary"></div>
+                                        <div><label class="block text-sm font-semibold text-gray-700 mb-1">Nilai Transaksi per 1 Poin (Rp)</label><input type="number" id="setting-rupiah-point" min="1" step="100" value="${Number(cfg.rupiahPerPoint || 10000)}" class="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-corp-primary"></div>
+                                        <div><label class="block text-sm font-semibold text-gray-700 mb-1">Nilai 1 Poin untuk Diskon (Rp)</label><input type="number" id="setting-point-value" min="0" step="100" value="${Number(cfg.pointValue || 100)}" class="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-corp-primary"></div>
+                                    </div>
+                                    <label class="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 rounded-lg cursor-pointer"><input type="checkbox" id="setting-points-enabled" ${cfg.pointsRedemptionEnabled ? 'checked' : ''} class="w-4 h-4 text-corp-primary"><span><strong class="text-sm text-gray-800">Izinkan penukaran poin menjadi diskon</strong><span class="block text-xs text-gray-500 mt-0.5">Poin customer dapat digunakan saat pembayaran.</span></span></label>
+                                    <div class="text-xs text-gray-500 bg-gray-50 rounded-lg p-3 border">Contoh: Rp10.000 transaksi = 1 poin. Jika 1 poin bernilai Rp100, maka 500 poin dapat menjadi Rp50.000 diskon.</div>
+                                </div>
+                                <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3"><button type="button" onclick="app.closeModal()" class="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition">Batal</button><button type="submit" class="px-4 py-2 bg-corp-primary text-white font-semibold rounded-lg hover:bg-blue-800 transition shadow"><i class="ph ph-floppy-disk mr-1.5"></i> Simpan Pengaturan</button></div>
+                            </form>
+                        </div>
+                    </div>`;
+                document.getElementById('modal-root').innerHTML = modalHtml;
+            },
+
+            async saveLoyaltySettings(e) {
+                e.preventDefault();
+                if (!currentUser || currentUser.role !== 'Administrator') return;
+                const maxDiscount = Math.min(100, Math.max(0, Number(document.getElementById('setting-max-discount').value) || 0));
+                const defaultDiscount = Math.min(maxDiscount, Math.max(0, Number(document.getElementById('setting-default-discount').value) || 0));
+                appData.settings = {
+                    defaultDiscountPercent: defaultDiscount,
+                    maxDiscountPercent: maxDiscount,
+                    rupiahPerPoint: Math.max(1, Number(document.getElementById('setting-rupiah-point').value) || 10000),
+                    pointValue: Math.max(0, Number(document.getElementById('setting-point-value').value) || 100),
+                    pointsRedemptionEnabled: document.getElementById('setting-points-enabled').checked
+                };
+                this.saveLocalStorage();
+                this.closeModal();
+                showToast('Pengaturan diskon & poin disimpan. Menyinkronkan...', 'info');
+                const res = await apiService.sendAction('saveSettings', appData.settings);
+                showToast(res?.status === 'success' ? 'Pengaturan berhasil tersimpan di Google Sheets.' : 'Pengaturan tersimpan lokal, tetapi belum tersimpan di Google Sheets.', res?.status === 'success' ? 'success' : 'error');
             },
 
             openUserModal(userId = null) {
@@ -2704,7 +2929,7 @@
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
                 const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
-// Versi: sinkronisasi tanggal pemesanan + migrasi schema Orders otomatis
+// Versi: Orders + Diskon + Loyalty Poin + Customer ID unik + Settings
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -2716,207 +2941,155 @@ function handleRequest(e) {
     var action = e && e.parameter ? e.parameter.action : null;
     var postData = null;
     if (e && e.postData && e.postData.contents) {
-      try {
-        var parsed = JSON.parse(e.postData.contents);
-        action = parsed.action || action;
-        postData = parsed.data;
-      } catch(err) {}
+      try { var parsed = JSON.parse(e.postData.contents); action = parsed.action || action; postData = parsed.data; } catch(err) {}
     }
     var result = {};
     if (action === 'ping') {
-      result = { status: 'success', message: 'Koneksi Berhasil!', spreadsheetId: ss.getId(), spreadsheetName: ss.getName() };
+      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName() };
     } else if (action === 'diagnose') {
-      ensureOrdersSchema(ss);
+      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       var diagSheet = ss.getSheetByName('Orders');
-      var diagHeaders = diagSheet ? diagSheet.getRange(1, 1, 1, diagSheet.getLastColumn()).getValues()[0].map(function(h){ return String(h).trim(); }) : [];
-      result = { status: 'success', spreadsheetId: ss.getId(), spreadsheetName: ss.getName(), ordersSheet: !!diagSheet, headers: diagHeaders, hasDateColumn: diagHeaders.indexOf('date') !== -1 };
+      var diagHeaders = diagSheet ? diagSheet.getRange(1,1,1,diagSheet.getLastColumn()).getValues()[0].map(function(h){return String(h).trim();}) : [];
+      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings') };
     } else if (action === 'getAllData') {
+      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      result = { status:'success', orders:getSheetData(ss,'Orders'), books:getSheetData(ss,'Books'), users:getSheetData(ss,'Users'), settings:getSettings(ss) };
+    } else if (action === 'setupOrders') {
+      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      result = { status:'success', message:'Struktur Orders dan Settings berhasil diperbarui.' };
+    } else if (action === 'saveSettings') {
+      ensureSettingsSchema(ss); saveSettings(ss, postData || {});
+      result = { status:'success', message:'Pengaturan tersimpan.' };
+    } else if (action === 'reserveCustomerId') {
       ensureOrdersSchema(ss);
-      result = {
-        status: 'success',
-        orders: getSheetData(ss, 'Orders'),
-        books: getSheetData(ss, 'Books'),
-        users: getSheetData(ss, 'Users')
-      };
+      var reservedId = reserveNextCustomerId(ss.getSheetByName('Orders'));
+      result = { status:'success', customerId:reservedId, message:'Customer ID unik berhasil dibuat.' };
     } else if (action === 'saveOrder') {
       if (!postData) throw new Error('Data pesanan tidak ditemukan.');
-      ensureOrdersSchema(ss);
-      var sheet = ss.getSheetByName('Orders');
-      if (postData.date !== undefined && postData.date !== null && String(postData.date).trim() !== '') {
-        postData.date = String(postData.date).trim();
-      }
-      upsertRowDynamic(sheet, 'id', postData.id, postData);
+      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      if (postData.date !== undefined && postData.date !== null && String(postData.date).trim() !== '') postData.date = String(postData.date).trim();
+      if (!postData.customerId) throw new Error('Customer ID wajib tersedia.');
+      validateCustomerIdConsistency(ss.getSheetByName('Orders'), postData);
+      upsertRowDynamic(ss.getSheetByName('Orders'),'id',postData.id,postData);
       SpreadsheetApp.flush();
-      result = { status: 'success', id: postData.id, date: postData.date || '' };
-    } else if (action === 'setupOrders') {
-      ensureOrdersSchema(ss);
-      result = { status: 'success', message: 'Struktur Orders berhasil diperbarui. Kolom date tersedia.' };
+      result = { status:'success', id:postData.id, date:postData.date || '' };
     } else if (action === 'deleteOrder') {
-      deleteRowById(ss, 'Orders', postData.id);
-      result = { status: 'success' };
+      deleteRowById(ss,'Orders',postData.id); result = {status:'success'};
     } else if (action === 'saveBook') {
-      var sheet = ss.getSheetByName('Books');
-      if(!sheet) {
-        sheet = ss.insertSheet('Books');
-        sheet.appendRow(['id', 'title', 'author', 'pages', 'category', 'costPrice', 'defaultPrice', 'margin', 'stock']);
-      }
-      upsertRowDynamic(sheet, 'id', postData.id, postData);
-      result = { status: 'success' };
-    } else if (action === 'deleteBooksBatch') {
-      var sheet = ss.getSheetByName('Books');
-      if (sheet) {
-        var ids = postData.ids || [];
-        var data = sheet.getDataRange().getValues();
-        for (var i = data.length - 1; i >= 1; i--) {
-          if (ids.indexOf(String(data[i][0])) !== -1) sheet.deleteRow(i + 1);
-        }
-      }
-      result = { status: 'success' };
+      upsertRowDynamic(ss.getSheetByName('Books'),'id',postData.id,postData); result = {status:'success'};
+    } else if (action === 'deleteBook') {
+      deleteRowById(ss,'Books',postData.id); result = {status:'success'};
     } else if (action === 'saveUser') {
-      var sheet = ss.getSheetByName('Users');
-      if(!sheet) {
-        sheet = ss.insertSheet('Users');
-        sheet.appendRow(['id', 'username', 'password', 'role', 'name']);
-      }
-      upsertRowDynamic(sheet, 'id', postData.id, postData);
-      result = { status: 'success' };
+      upsertRowDynamic(ss.getSheetByName('Users'),'id',postData.id,postData); result = {status:'success'};
     } else if (action === 'deleteUser') {
-      deleteRowById(ss, 'Users', postData.id);
-      result = { status: 'success' };
+      deleteRowById(ss,'Users',postData.id); result = {status:'success'};
     } else {
-      result = { status: 'error', message: 'Action tidak dikenal' };
+      result = { status:'error', message:'Action tidak dikenal' };
     }
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status:'error',message:err.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally { lock.releaseLock(); }
 }
 
-// Struktur canonical untuk sheet Orders. Kolom baru ditambahkan tanpa menggeser data lama.
-// Kolom 'date' adalah Tanggal Pemesanan yang dipakai aplikasi.
+function reserveNextCustomerId(sheet) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  var headers = lastCol ? sheet.getRange(1,1,1,lastCol).getValues()[0].map(function(h){return String(h).trim();}) : [];
+  var idx = headers.indexOf('customerId');
+  var max = 0;
+  if (idx !== -1 && lastRow > 1) {
+    var values = sheet.getRange(2, idx + 1, lastRow - 1, 1).getValues();
+    values.forEach(function(row) {
+      var id = String(row[0] || '').trim().toUpperCase();
+      var match = id.match(/^CUST-(\d+)$/);
+      if (match) max = Math.max(max, parseInt(match[1], 10) || 0);
+    });
+  }
+  return 'CUST-' + String(max + 1).padStart(6, '0');
+}
+
+function validateCustomerIdConsistency(sheet, order) {
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow <= 1 || lastCol === 0) return;
+  var headers = sheet.getRange(1,1,1,lastCol).getValues()[0].map(function(h){return String(h).trim();});
+  var idIdx = headers.indexOf('customerId');
+  var nameIdx = headers.indexOf('customerName');
+  var phoneIdx = headers.indexOf('customerPhone');
+  var orderIdIdx = headers.indexOf('id');
+  if (idIdx === -1) return;
+  var rows = sheet.getRange(2,1,lastRow-1,lastCol).getValues();
+  for (var i=0;i<rows.length;i++) {
+    var rowId = String(rows[i][orderIdIdx] || '');
+    var custId = String(rows[i][idIdx] || '').trim().toUpperCase();
+    if (!custId || custId !== String(order.customerId).trim().toUpperCase() || rowId === String(order.id)) continue;
+    var oldName = nameIdx === -1 ? '' : String(rows[i][nameIdx] || '').trim().toLowerCase();
+    var oldPhone = phoneIdx === -1 ? '' : String(rows[i][phoneIdx] || '').replace(/\D/g,'');
+    var newName = String(order.customerName || '').trim().toLowerCase();
+    var newPhone = String(order.customerPhone || '').replace(/\D/g,'');
+    if ((oldPhone && newPhone && oldPhone !== newPhone) || (oldName && newName && oldName !== newName && !oldPhone && !newPhone)) {
+      throw new Error('Customer ID ' + order.customerId + ' sudah dimiliki customer lain. Sistem menolak ID ganda.');
+    }
+  }
+}
+
 function ensureOrdersSchema(ss) {
   var sheet = ss.getSheetByName('Orders');
-  var requiredHeaders = ['id', 'date', 'customerName', 'customerPhone', 'customerEmail', 'customerAddress', 'bookId', 'qty', 'unitPrice', 'shippingCost', 'totalPrice', 'status', 'paymentStatus', 'dpAmount', 'shippingVendor', 'trackingNumber'];
-
-  if (!sheet) {
-    sheet = ss.insertSheet('Orders');
-    sheet.appendRow(requiredHeaders);
-    return;
+  var requiredHeaders = ['id','date','customerId','customerName','customerPhone','customerEmail','customerAddress','bookId','qty','unitPrice','shippingCost','subtotal','discountPercent','discountAmount','pointsUsed','pointsDiscount','pointsEarned','totalPrice','status','paymentStatus','dpAmount','shippingVendor','trackingNumber'];
+  if (!sheet) { sheet=ss.insertSheet('Orders'); sheet.appendRow(requiredHeaders); return; }
+  var data=sheet.getDataRange().getValues();
+  if (data.length===0 || data[0].length===0) { sheet.clear(); sheet.appendRow(requiredHeaders); return; }
+  var headers=data[0].map(function(h){return String(h).trim();});
+  var dateIndex=headers.indexOf('date');
+  var aliasIndex=-1;
+  ['tanggalPemesanan','Tanggal Pemesanan','tanggal_pemesanan'].some(function(alias){aliasIndex=headers.indexOf(alias);return aliasIndex!==-1;});
+  if (dateIndex===-1) {
+    var idIndex=headers.indexOf('id'); var newCol;
+    if(idIndex!==-1){sheet.insertColumnAfter(idIndex+1);newCol=idIndex+2;}else{newCol=sheet.getLastColumn()+1;}
+    sheet.getRange(1,newCol).setValue('date'); dateIndex=newCol-1;
+    if(aliasIndex!==-1 && data.length>1){var values=data.slice(1).map(function(row){return [row[aliasIndex]||''];});if(values.length)sheet.getRange(2,newCol,values.length,1).setValues(values);}
   }
-
-  var range = sheet.getDataRange();
-  var data = range.getValues();
-  if (data.length === 0 || data[0].length === 0) {
-    sheet.clear();
-    sheet.appendRow(requiredHeaders);
-    return;
-  }
-
-  var headers = data[0].map(function(h) { return String(h).trim(); });
-  var dateIndex = headers.indexOf('date');
-  var aliasIndex = -1;
-  ['tanggalPemesanan', 'Tanggal Pemesanan', 'tanggal_pemesanan'].some(function(alias) {
-    aliasIndex = headers.indexOf(alias);
-    return aliasIndex !== -1;
-  });
-
-  if (dateIndex === -1) {
-    // Tambahkan date tepat setelah id agar schema mudah dibaca, tanpa menghapus data lama.
-    var idIndex = headers.indexOf('id');
-    var newCol;
-    if (idIndex !== -1) {
-      sheet.insertColumnAfter(idIndex + 1);
-      newCol = idIndex + 2;
-    } else {
-      newCol = sheet.getLastColumn() + 1;
-    }
-    sheet.getRange(1, newCol).setValue('date');
-    dateIndex = newCol - 1;
-
-    // Migrasikan tanggal dari alias jika spreadsheet sudah pernah memakai nama tersebut.
-    if (aliasIndex !== -1 && data.length > 1) {
-      var values = data.slice(1).map(function(row) { return [row[aliasIndex] || '']; });
-      if (values.length) sheet.getRange(2, newCol, values.length, 1).setValues(values);
-    }
-  }
-
-  // Tambahkan header lain yang dibutuhkan aplikasi, tetapi jangan menghapus kolom tambahan.
-  headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function(h) { return String(h).trim(); });
-  requiredHeaders.forEach(function(header) {
-    if (headers.indexOf(header) === -1) {
-      sheet.getRange(1, sheet.getLastColumn() + 1).setValue(header);
-      headers.push(header);
-    }
-  });
-
-  // Format kolom date sebagai tanggal agar mudah dibaca di Google Sheets.
-  var finalDateIndex = headers.indexOf('date');
-  if (finalDateIndex !== -1 && sheet.getLastRow() > 1) {
-    sheet.getRange(2, finalDateIndex + 1, sheet.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd');
-  }
+  headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(function(h){return String(h).trim();});
+  requiredHeaders.forEach(function(header){if(headers.indexOf(header)===-1){sheet.getRange(1,sheet.getLastColumn()+1).setValue(header);headers.push(header);}});
+  var finalDateIndex=headers.indexOf('date');
+  if(finalDateIndex!==-1 && sheet.getLastRow()>1) sheet.getRange(2,finalDateIndex+1,sheet.getLastRow()-1,1).setNumberFormat('yyyy-mm-dd');
 }
 
-function getSheetData(ss, sheetName) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var headers = data[0];
-  var rows = [];
-  for (var i = 1; i < data.length; i++) {
-    var rowObj = {};
-    for (var j = 0; j < headers.length; j++) {
-      var val = data[i][j];
-      if (val instanceof Date) {
-        val = Utilities.formatDate(val, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
-      }
-      rowObj[headers[j]] = val;
-    }
-    rows.push(rowObj);
-  }
-  return rows;
+function ensureSettingsSchema(ss){
+  var sheet=ss.getSheetByName('Settings');
+  if(!sheet){sheet=ss.insertSheet('Settings');sheet.appendRow(['key','value']);}
+  var defaults={defaultDiscountPercent:'0',maxDiscountPercent:'20',rupiahPerPoint:'10000',pointValue:'100',pointsRedemptionEnabled:'true'};
+  var data=sheet.getDataRange().getValues();
+  var existing={};
+  for(var i=1;i<data.length;i++){if(data[i][0]!=='' ) existing[String(data[i][0])]=i+1;}
+  Object.keys(defaults).forEach(function(key){if(!existing[key])sheet.appendRow([key,defaults[key]]);});
 }
-
-function upsertRowDynamic(sheet, keyColumnName, keyValue, rowValuesObj) {
-  var data = sheet.getDataRange().getValues();
-  if (data.length === 0 || data[0].length === 0) {
-    var newHeaders = Object.keys(rowValuesObj);
-    sheet.appendRow(newHeaders);
-    var newRow = newHeaders.map(function(h) { return rowValuesObj[h] !== undefined ? rowValuesObj[h] : ''; });
-    sheet.appendRow(newRow);
-    return;
-  }
-
-  var headers = data[0];
-  var keyIndex = headers.indexOf(keyColumnName);
-  var rowArray = headers.map(function(header) {
-    return rowValuesObj[header] !== undefined ? rowValuesObj[header] : '';
-  });
-
-  if (keyIndex !== -1 && data.length > 1) {
-    for (var r = 1; r < data.length; r++) {
-      if (String(data[r][keyIndex]) === String(keyValue)) {
-        sheet.getRange(r + 1, 1, 1, rowArray.length).setValues([rowArray]);
-        return;
-      }
-    }
-  }
+function getSettings(ss){
+  ensureSettingsSchema(ss); var sheet=ss.getSheetByName('Settings'); var data=sheet.getDataRange().getValues(); var out={};
+  for(var i=1;i<data.length;i++){if(data[i][0]!=='' ) out[String(data[i][0])]=data[i][1];}
+  return {defaultDiscountPercent:Number(out.defaultDiscountPercent||0),maxDiscountPercent:Number(out.maxDiscountPercent||20),rupiahPerPoint:Number(out.rupiahPerPoint||10000),pointValue:Number(out.pointValue||100),pointsRedemptionEnabled:String(out.pointsRedemptionEnabled)!=='false'};
+}
+function saveSettings(ss,obj){
+  ensureSettingsSchema(ss); var sheet=ss.getSheetByName('Settings'); var data=sheet.getDataRange().getValues(); var rows={};
+  for(var i=1;i<data.length;i++) rows[String(data[i][0])]=i+1;
+  var values={defaultDiscountPercent:String(obj.defaultDiscountPercent||0),maxDiscountPercent:String(obj.maxDiscountPercent||0),rupiahPerPoint:String(obj.rupiahPerPoint||10000),pointValue:String(obj.pointValue||100),pointsRedemptionEnabled:String(obj.pointsRedemptionEnabled!==false)};
+  Object.keys(values).forEach(function(k){if(rows[k])sheet.getRange(rows[k],2).setValue(values[k]);else sheet.appendRow([k,values[k]]);});
+}
+function getSheetData(ss,sheetName){
+  var sheet=ss.getSheetByName(sheetName); if(!sheet)return []; var data=sheet.getDataRange().getValues(); if(data.length<=1)return [];
+  var headers=data[0]; var rows=[];
+  for(var i=1;i<data.length;i++){var rowObj={};for(var j=0;j<headers.length;j++){var val=data[i][j];if(val instanceof Date)val=Utilities.formatDate(val,ss.getSpreadsheetTimeZone(),'yyyy-MM-dd');rowObj[String(headers[j]).trim()]=val;}rows.push(rowObj);} return rows;
+}
+function upsertRowDynamic(sheet,keyColumnName,keyValue,rowValuesObj){
+  var data=sheet.getDataRange().getValues();
+  if(data.length===0||data[0].length===0){var newHeaders=Object.keys(rowValuesObj);sheet.appendRow(newHeaders);sheet.appendRow(newHeaders.map(function(h){return rowValuesObj[h]!==undefined?rowValuesObj[h]:'';}));return;}
+  var headers=data[0].map(function(h){return String(h).trim();}); var keyIndex=headers.indexOf(keyColumnName); var rowArray=headers.map(function(header){return rowValuesObj[header]!==undefined?rowValuesObj[header]:'';});
+  if(keyIndex!==-1&&data.length>1){for(var r=1;r<data.length;r++){if(String(data[r][keyIndex])===String(keyValue)){sheet.getRange(r+1,1,1,rowArray.length).setValues([rowArray]);return;}}}
   sheet.appendRow(rowArray);
 }
-
-function deleteRowById(ss, sheetName, id) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (sheet) {
-    var data = sheet.getDataRange().getValues();
-    if (data.length < 2) return;
-    var headers = data[0];
-    var keyIndex = headers.indexOf('id');
-    if (keyIndex === -1) return;
-    for (var i = data.length - 1; i >= 1; i--) {
-      if (String(data[i][keyIndex]) === String(id)) sheet.deleteRow(i + 1);
-    }
-  }
-}`
+function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);if(sheet){var data=sheet.getDataRange().getValues();if(data.length<2)return;var headers=data[0];var keyIndex=headers.indexOf('id');if(keyIndex===-1)return;for(var i=data.length-1;i>=1;i--){if(String(data[i][keyIndex])===String(id))sheet.deleteRow(i+1);}}}
+`
 
                 const modalHtml = `
                     <div id="sheet-config-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 fade-in">
