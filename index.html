@@ -217,7 +217,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="logo YKBUT Press_2.jpeg" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -252,7 +252,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="logo YKBUT Press_2.jpeg" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -414,11 +414,17 @@
 
         let currentUser = null;
         let statusChartInstance = null;
+        let monthlyOrdersChartInstance = null;
         let orderSearchQuery = '';
         let bookSearchQuery = '';
         let selectedBookIds = [];
 
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
+        const formatDateID = (dateValue) => {
+            if (!dateValue) return '-';
+            const d = new Date(`${dateValue}T00:00:00`);
+            return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID');
+        };
         const getBook = (id) => mockBooks.find(b => b.id === id);
 
         // Pengaturan header struk thermal. Disimpan di browser agar tidak mengubah
@@ -730,6 +736,10 @@
                     statusChartInstance.destroy();
                     statusChartInstance = null;
                 }
+                if(monthlyOrdersChartInstance) {
+                    monthlyOrdersChartInstance.destroy();
+                    monthlyOrdersChartInstance = null;
+                }
 
                 switch(view) {
                     case 'dashboard':
@@ -812,6 +822,22 @@
                 const countShipping = appData.orders.filter(o => o.status === ORDER_STATUS.SHIPPING).length;
                 const countCompleted = appData.orders.filter(o => o.status === ORDER_STATUS.COMPLETED).length;
 
+                // Ringkasan pemesanan bulanan: 12 bulan terakhir termasuk bulan berjalan.
+                const monthlyOrderData = [];
+                const now = new Date();
+                for (let i = 11; i >= 0; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const year = d.getFullYear();
+                    const month = d.getMonth();
+                    const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+                    const count = appData.orders.filter(o => {
+                        if (!o.date) return false;
+                        const od = new Date(`${o.date}T00:00:00`);
+                        return od.getFullYear() === year && od.getMonth() === month;
+                    }).length;
+                    monthlyOrderData.push({ label, count });
+                }
+
                 const urlSet = !!getWebAppUrl();
 
                 container.innerHTML = `
@@ -881,14 +907,33 @@
                             </div>
                         </div>
 
+                        <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-lg font-bold text-gray-800 mb-1">Pemesanan Tiap Bulan</h3>
+                                    <p class="text-xs text-gray-500">Jumlah transaksi berdasarkan tanggal pemesanan dalam 12 bulan terakhir.</p>
+                                </div>
+                                <div class="bg-blue-50 text-corp-primary p-3 rounded-lg"><i class="ph ph-chart-bar text-2xl"></i></div>
+                            </div>
+                            <div class="chart-container" style="max-width:none;height:280px;max-height:none;">
+                                <canvas id="monthlyOrdersChart"></canvas>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex flex-col justify-between">
                                 <div>
-                                    <h3 class="text-lg font-bold text-gray-800 mb-1">Status Pemesanan</h3>
+                                    <h3 class="text-lg font-bold text-gray-800 mb-1">Update Status Transaksi</h3>
                                     <p class="text-xs text-gray-500 mb-4">Distribusi tahapan pemrosesan pesanan saat ini.</p>
                                 </div>
                                 <div class="chart-container">
                                     <canvas id="orderStatusChart"></canvas>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
+                                    <div class="bg-blue-50 rounded-lg p-2 text-center"><p class="text-[10px] text-blue-700 font-semibold">Pesanan Baru</p><p class="text-lg font-bold text-blue-800">${countNew}</p></div>
+                                    <div class="bg-yellow-50 rounded-lg p-2 text-center"><p class="text-[10px] text-yellow-700 font-semibold">Diproses</p><p class="text-lg font-bold text-yellow-800">${countProcessed}</p></div>
+                                    <div class="bg-purple-50 rounded-lg p-2 text-center"><p class="text-[10px] text-purple-700 font-semibold">Pengiriman</p><p class="text-lg font-bold text-purple-800">${countShipping}</p></div>
+                                    <div class="bg-green-50 rounded-lg p-2 text-center"><p class="text-[10px] text-green-700 font-semibold">Selesai</p><p class="text-lg font-bold text-green-800">${countCompleted}</p></div>
                                 </div>
                             </div>
                             
@@ -925,6 +970,35 @@
                 `;
 
                 setTimeout(() => {
+                    const monthlyCtx = document.getElementById('monthlyOrdersChart');
+                    if(monthlyCtx) {
+                        monthlyOrdersChartInstance = new Chart(monthlyCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: monthlyOrderData.map(item => item.label),
+                                datasets: [{
+                                    label: 'Jumlah Pemesanan',
+                                    data: monthlyOrderData.map(item => item.count),
+                                    backgroundColor: '#2563EB',
+                                    borderRadius: 6,
+                                    borderSkipped: false
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: { callbacks: { label: (context) => ` ${context.raw} transaksi` } }
+                                },
+                                scales: {
+                                    y: { beginAtZero: true, ticks: { precision: 0, stepSize: 1 }, grid: { color: '#E5E7EB' } },
+                                    x: { grid: { display: false } }
+                                }
+                            }
+                        });
+                    }
+
                     const ctx = document.getElementById('orderStatusChart');
                     if(ctx) {
                         statusChartInstance = new Chart(ctx, {
@@ -982,6 +1056,9 @@
                     return `
                     <tr class="border-b hover:bg-gray-50 transition-colors">
                         <td class="py-3 px-4 text-sm font-medium text-gray-800">${order.id}</td>
+                        <td class="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
+                            <span class="font-medium text-gray-700">${formatDateID(order.date)}</span>
+                        </td>
                         <td class="py-3 px-4 text-sm text-gray-600">
                             <p class="font-bold text-gray-800">${order.customerName}</p>
                             <p class="text-xs text-gray-500">${order.customerPhone}</p>
@@ -1046,6 +1123,7 @@
                                 <thead>
                                     <tr class="bg-white border-b text-sm text-gray-500 uppercase tracking-wider">
                                         <th class="py-3 px-4 font-semibold">ID Transaksi</th>
+                                        <th class="py-3 px-4 font-semibold">Tanggal Pemesanan</th>
                                         <th class="py-3 px-4 font-semibold">Pemesan</th>
                                         <th class="py-3 px-4 font-semibold">Buku & Qty</th>
                                         <th class="py-3 px-4 font-semibold">Total Harga</th>
@@ -1055,7 +1133,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${tableRows.length > 0 ? tableRows : '<tr><td colspan="7" class="text-center py-8 text-gray-500">Data pemesanan tidak ditemukan.</td></tr>'}
+                                    ${tableRows.length > 0 ? tableRows : '<tr><td colspan="8" class="text-center py-8 text-gray-500">Data pemesanan tidak ditemukan.</td></tr>'}
                                 </tbody>
                             </table>
                         </div>
@@ -1209,6 +1287,12 @@
                             </div>
                             <div class="p-6 space-y-4">
                                 <p class="text-sm text-gray-500 mb-2">ID Transaksi: <span class="font-bold text-gray-800">${order.id}</span> | Pemesan: <span class="font-bold text-gray-800">${order.customerName}</span></p>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">Tanggal Pemesanan</label>
+                                    <input type="date" id="modal-order-date" value="${order.date || todayISO()}" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none">
+                                    <p class="text-[10px] text-gray-400 mt-1">Tanggal ini digunakan untuk analitik pemesanan dan timeline transaksi.</p>
+                                </div>
                                 
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-1">Status Pembayaran</label>
@@ -1275,8 +1359,17 @@
                 const newOrderStatus = document.getElementById('modal-order-status').value;
                 const vendor = document.getElementById('modal-vendor').value;
                 const resi = document.getElementById('modal-resi').value;
+                const newOrderDate = document.getElementById('modal-order-date')?.value || order.date || todayISO();
 
                 ensureOrderHistory(order);
+                order.date = newOrderDate;
+                // Jika histori awal masih memakai tanggal lama/kosong, sinkronkan dengan tanggal pemesanan.
+                if (orderHistories[order.id]?.transaction?.length === 1) {
+                    orderHistories[order.id].transaction[0].date = newOrderDate;
+                }
+                if (orderHistories[order.id]?.payment?.length >= 1 && orderHistories[order.id].payment[0].status === PAYMENT_STATUS.UNPAID) {
+                    orderHistories[order.id].payment[0].date = newOrderDate;
+                }
                 const changeDate = todayISO();
                 if (order.paymentStatus !== newPayStatus) {
                     orderHistories[order.id].payment.push({ status: newPayStatus, date: changeDate });
@@ -1319,6 +1412,10 @@
                             <div class="p-6 border-b border-gray-100 bg-gray-50">
                                 <h3 class="text-lg font-bold text-gray-800 flex items-center mb-4"><i class="ph ph-user-list text-corp-primary text-2xl mr-2"></i> Informasi Pemesan</h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-semibold text-gray-700 mb-1">Tanggal Pemesanan *</label>
+                                        <input type="date" id="order-date" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
+                                    </div>
                                     <div>
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Nama Pemesan *</label>
                                         <input type="text" id="cust-name" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none transition">
@@ -1396,6 +1493,8 @@
                 `;
 
                 const form = document.getElementById('form-add-order');
+                const inputOrderDate = document.getElementById('order-date');
+                if (inputOrderDate) inputOrderDate.value = todayISO();
                 const selectBook = document.getElementById('book-select');
                 const inputPrice = document.getElementById('book-price');
                 const inputQty = document.getElementById('book-qty');
@@ -1454,7 +1553,7 @@
 
                     const newOrder = {
                         id: `ORD-${String(appData.orders.length + 1).padStart(3, '0')}`,
-                        date: new Date().toISOString().split('T')[0],
+                        date: document.getElementById('order-date').value || todayISO(),
                         customerName: document.getElementById('cust-name').value,
                         customerPhone: document.getElementById('cust-phone').value,
                         customerEmail: document.getElementById('cust-email').value,
@@ -1527,9 +1626,8 @@
                     .replace(/"/g, '&quot;')
                     .replace(/'/g, '&#039;');
 
-                const orderDate = order.date
-                    ? new Date(`${order.date}T00:00:00`).toLocaleDateString('id-ID')
-                    : '-';
+                // Tanggal pada struk adalah tanggal saat struk dicetak, bukan tanggal pemesanan.
+                const printDate = formatDateID(todayISO());
 
                 let paymentInfoHtml = '';
                 if(order.paymentStatus === PAYMENT_STATUS.PAID) {
@@ -1571,7 +1669,7 @@
 
                         <div class="receipt-label" style="margin-bottom:9px;">
                             <div class="receipt-row"><span>No:</span><span>${safe(order.id)}</span></div>
-                            <div class="receipt-row"><span>Tgl:</span><span>${safe(orderDate)}</span></div>
+                            <div class="receipt-row"><span>Tgl Cetak:</span><span>${safe(printDate)}</span></div>
                             <div style="margin-top:5px;">
                                 <div style="font-weight:700;">Pemesan:</div>
                                 <div>${safe(order.customerName)}</div>
