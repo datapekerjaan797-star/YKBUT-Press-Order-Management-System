@@ -539,7 +539,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -574,7 +574,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -2130,26 +2130,18 @@
                         if (!existingCustomer) { showToast('Data customer tidak ditemukan. Silakan pilih ulang.', 'error'); return; }
                         customerId = existingCustomer.id;
                     } else {
-                        // Reservasi ID dilakukan di server dengan LockService agar dua perangkat
-                        // yang membuat customer baru bersamaan tetap memperoleh ID berbeda.
-                        showToast('Membuat Customer ID unik...', 'info');
-                        const reserved = await apiService.sendAction('reserveCustomerId', {
-                            customerName: document.getElementById('cust-name').value,
-                            customerPhone: document.getElementById('cust-phone').value,
-                            customerEmail: document.getElementById('cust-email').value
-                        });
-                        if (!reserved || reserved.status !== 'success' || !reserved.customerId) {
-                            showToast('Customer ID gagal dibuat. Pesanan tidak disimpan.', 'error');
-                            return;
-                        }
-                        customerId = reserved.customerId;
+                        // ID yang tampil di form adalah kandidat/preview. ID final dibuat oleh server
+                        // secara atomik saat saveOrder, sehingga tidak ada risiko bentrok antar perangkat.
+                        customerId = customerId || getNextCustomerId();
                         customerIdInput.value = customerId;
+                        showToast('Menyiapkan Customer ID otomatis...', 'info');
                     }
 
                     const newOrder = {
                         id: `ORD-${String(appData.orders.length + 1).padStart(3, '0')}`,
                         date: document.getElementById('order-date').value || todayISO(),
                         customerId: customerId,
+                        isNewCustomer: !isExistingCustomer,
                         customerName: document.getElementById('cust-name').value,
                         customerPhone: document.getElementById('cust-phone').value,
                         customerEmail: document.getElementById('cust-email').value,
@@ -2191,6 +2183,12 @@
                     app.navigate('orders');
                     
                     const resOrder = await apiService.sendAction('saveOrder', newOrder);
+                    if (resOrder && resOrder.status === 'success' && resOrder.customerId) {
+                        newOrder.customerId = resOrder.customerId;
+                        const localCustomerIdInput = document.getElementById('cust-id');
+                        if (localCustomerIdInput) localCustomerIdInput.value = resOrder.customerId;
+                        this.saveLocalStorage();
+                    }
                     let resBook = null;
                     if (book) {
                         resBook = await apiService.sendAction('saveBook', book);
@@ -2206,6 +2204,7 @@
                         }
                     } else {
                         showToast('Pesanan tersimpan lokal, tetapi Google Sheets menolak: ' + (resOrder?.message || 'deployment belum siap'), 'error');
+                        console.error('saveOrder gagal:', resOrder);
                     }
                 });
             },
@@ -2929,7 +2928,7 @@
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
                 const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
-// Versi: Orders + Diskon + Loyalty Poin + Customer ID unik + Settings
+// Versi: Orders + Diskon + Loyalty Poin + Customer ID unik atomik + Settings + fallback saveOrder
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -2968,11 +2967,16 @@ function handleRequest(e) {
       if (!postData) throw new Error('Data pesanan tidak ditemukan.');
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       if (postData.date !== undefined && postData.date !== null && String(postData.date).trim() !== '') postData.date = String(postData.date).trim();
-      if (!postData.customerId) throw new Error('Customer ID wajib tersedia.');
+      // Untuk customer baru, server selalu menjadi sumber ID final. Ini mencegah duplicate
+      // meskipun dua perangkat mengirim transaksi hampir bersamaan.
+      if (postData.isNewCustomer === true || !postData.customerId) {
+        postData.customerId = reserveNextCustomerId(ss.getSheetByName('Orders'));
+      }
+      postData.customerId = String(postData.customerId).trim().toUpperCase();
       validateCustomerIdConsistency(ss.getSheetByName('Orders'), postData);
       upsertRowDynamic(ss.getSheetByName('Orders'),'id',postData.id,postData);
       SpreadsheetApp.flush();
-      result = { status:'success', id:postData.id, date:postData.date || '' };
+      result = { status:'success', id:postData.id, date:postData.date || '', customerId:postData.customerId };
     } else if (action === 'deleteOrder') {
       deleteRowById(ss,'Orders',postData.id); result = {status:'success'};
     } else if (action === 'saveBook') {
