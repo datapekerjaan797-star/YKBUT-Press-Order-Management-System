@@ -11,6 +11,10 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <!-- PDF Report: jsPDF + AutoTable -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
@@ -539,7 +543,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -574,7 +578,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -757,6 +761,7 @@
         let statusChartInstance = null;
         let monthlyOrdersChartInstance = null;
         let orderSearchQuery = '';
+        let orderFilters = { dateFrom: '', dateTo: '', status: '', paymentStatus: '', bookId: '' };
         let bookSearchQuery = '';
         let selectedBookIds = [];
 
@@ -1515,16 +1520,7 @@
                     return `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold border border-green-200">${status}</span>`;
                 };
 
-                const filteredOrders = appData.orders.filter(order => {
-                    if(!orderSearchQuery) return true;
-                    const q = orderSearchQuery.toLowerCase();
-                    const book = getBook(order.bookId);
-                    const bookTitle = book ? book.title.toLowerCase() : '';
-                    return order.id.toLowerCase().includes(q) ||
-                           order.customerName.toLowerCase().includes(q) ||
-                           order.customerPhone.includes(q) ||
-                           bookTitle.includes(q);
-                });
+                const filteredOrders = this.getFilteredOrders();
 
                 let tableRows = filteredOrders.map((order) => {
                     const book = getBook(order.bookId);
@@ -1579,21 +1575,69 @@
                                 <h3 class="text-lg font-bold text-gray-800">Daftar Pemesanan Buku</h3>
                                 <p class="text-xs text-gray-500">Kelola status pembayaran, resi pengiriman, hapus data, dan cetak invoice.</p>
                             </div>
-                            <div class="flex space-x-3 items-center">
-                                <div class="relative">
+                            <div class="flex flex-wrap gap-2 items-center w-full lg:w-auto lg:justify-end">
+                                <div class="relative flex-1 min-w-[220px] lg:flex-none">
                                     <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-gray-400"></i>
-                                    <input type="text" id="order-search-input" value="${orderSearchQuery}" oninput="app.handleOrderSearch(this.value)" placeholder="Cari nama/ID/buku..." class="pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-corp-primary outline-none">
+                                    <input type="text" id="order-search-input" value="${escapeHtml(orderSearchQuery)}" oninput="app.handleOrderSearch(this.value)" placeholder="Cari nama/ID/buku..." class="w-full lg:w-56 pl-9 pr-4 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-corp-primary outline-none">
                                 </div>
                                 ${currentUser && currentUser.role !== 'Viewer' ? `<button onclick="app.openReceiptHeaderModal()" class="bg-white text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors flex items-center shadow border border-gray-300" title="Atur informasi header struk thermal">
                                     <i class="ph ph-receipt mr-2 text-lg text-corp-primary"></i> Pengaturan Struk
                                 </button>` : ''}
-                                <button onclick="app.exportToExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center shadow">
-                                    <i class="ph ph-file-xls mr-2 text-lg"></i> Export Excel
+                                <button onclick="app.exportToExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center shadow" title="Export laporan sesuai filter aktif">
+                                    <i class="ph ph-file-xls mr-2 text-lg"></i> Export Laporan
+                                </button>
+                                <button onclick="app.downloadAllReportPDF()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors flex items-center shadow" title="Download laporan seluruh data dalam PDF A4 portrait">
+                                    <i class="ph ph-file-pdf mr-2 text-lg"></i> PDF Laporan All
                                 </button>
                                 ${currentUser && currentUser.role !== 'Viewer' ? `<button onclick="app.navigate('add-order')" class="bg-corp-dark text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-black transition-colors flex items-center shadow">
                                     <i class="ph ph-plus mr-2 text-corp-light"></i> Pesanan Baru
                                 </button>` : ''}
                             </div>
+                        </div>
+                        <div class="px-6 py-4 bg-white border-b border-gray-100">
+                            <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                <div class="flex items-center text-sm font-bold text-gray-700"><i class="ph ph-funnel mr-2 text-corp-primary"></i> Filter Data Pemesanan</div>
+                                <button onclick="app.resetOrderFilters()" class="text-xs text-gray-500 hover:text-red-600 font-semibold flex items-center px-2 py-1 rounded hover:bg-red-50 transition">
+                                    <i class="ph ph-arrow-counter-clockwise mr-1"></i> Reset Filter
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Tanggal Dari</label>
+                                    <input type="date" value="${orderFilters.dateFrom}" onchange="app.handleOrderFilter('dateFrom', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-corp-primary outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Tanggal Sampai</label>
+                                    <input type="date" value="${orderFilters.dateTo}" onchange="app.handleOrderFilter('dateTo', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-corp-primary outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Status Transaksi</label>
+                                    <select onchange="app.handleOrderFilter('status', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-corp-primary outline-none">
+                                        <option value="" ${!orderFilters.status ? 'selected' : ''}>Semua Status</option>
+                                        <option value="${ORDER_STATUS.NEW}" ${orderFilters.status === ORDER_STATUS.NEW ? 'selected' : ''}>${ORDER_STATUS.NEW}</option>
+                                        <option value="${ORDER_STATUS.PROCESSED}" ${orderFilters.status === ORDER_STATUS.PROCESSED ? 'selected' : ''}>${ORDER_STATUS.PROCESSED}</option>
+                                        <option value="${ORDER_STATUS.SHIPPING}" ${orderFilters.status === ORDER_STATUS.SHIPPING ? 'selected' : ''}>${ORDER_STATUS.SHIPPING}</option>
+                                        <option value="${ORDER_STATUS.COMPLETED}" ${orderFilters.status === ORDER_STATUS.COMPLETED ? 'selected' : ''}>${ORDER_STATUS.COMPLETED}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Status Pembayaran</label>
+                                    <select onchange="app.handleOrderFilter('paymentStatus', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-corp-primary outline-none">
+                                        <option value="" ${!orderFilters.paymentStatus ? 'selected' : ''}>Semua Pembayaran</option>
+                                        <option value="${PAYMENT_STATUS.UNPAID}" ${orderFilters.paymentStatus === PAYMENT_STATUS.UNPAID ? 'selected' : ''}>${PAYMENT_STATUS.UNPAID}</option>
+                                        <option value="${PAYMENT_STATUS.DP}" ${orderFilters.paymentStatus === PAYMENT_STATUS.DP ? 'selected' : ''}>${PAYMENT_STATUS.DP}</option>
+                                        <option value="${PAYMENT_STATUS.PAID}" ${orderFilters.paymentStatus === PAYMENT_STATUS.PAID ? 'selected' : ''}>${PAYMENT_STATUS.PAID}</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Buku</label>
+                                    <select onchange="app.handleOrderFilter('bookId', this.value)" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-corp-primary outline-none">
+                                        <option value="" ${!orderFilters.bookId ? 'selected' : ''}>Semua Buku</option>
+                                        ${mockBooks.map(b => `<option value="${escapeHtml(b.id)}" ${orderFilters.bookId === b.id ? 'selected' : ''}>${escapeHtml(b.title)}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -1683,33 +1727,285 @@
                     </div>`;
             },
 
+            getFilteredOrders() {
+                const f = orderFilters || {};
+                const q = String(orderSearchQuery || '').trim().toLowerCase();
+                return (appData.orders || []).filter(order => {
+                    const book = getBook(order.bookId);
+                    const bookTitle = book ? String(book.title).toLowerCase() : '';
+                    const searchable = [order.id, order.customerId, order.customerName, order.customerPhone, order.customerEmail, bookTitle]
+                        .map(v => String(v || '').toLowerCase());
+                    const matchesSearch = !q || searchable.some(v => v.includes(q));
+                    const date = String(order.date || '').slice(0,10);
+                    const matchesFrom = !f.dateFrom || (date && date >= f.dateFrom);
+                    const matchesTo = !f.dateTo || (date && date <= f.dateTo);
+                    const matchesStatus = !f.status || String(order.status || '') === String(f.status);
+                    const matchesPayment = !f.paymentStatus || String(order.paymentStatus || '') === String(f.paymentStatus);
+                    const matchesBook = !f.bookId || String(order.bookId || '') === String(f.bookId);
+                    return matchesSearch && matchesFrom && matchesTo && matchesStatus && matchesPayment && matchesBook;
+                });
+            },
+
             handleOrderSearch(val) {
                 orderSearchQuery = val;
                 this.renderOrders(document.getElementById('app-content'));
             },
 
+            handleOrderFilter(key, value) {
+                if (!(key in orderFilters)) return;
+                orderFilters[key] = value || '';
+                this.renderOrders(document.getElementById('app-content'));
+            },
+
+            resetOrderFilters() {
+                orderSearchQuery = '';
+                orderFilters = { dateFrom: '', dateTo: '', status: '', paymentStatus: '', bookId: '' };
+                this.renderOrders(document.getElementById('app-content'));
+            },
+
             exportToExcel() {
-                let tableHtml = `<table border="1"><tr><th>ID Transaksi</th><th>Tanggal</th><th>Nama Pemesan</th><th>No HP</th><th>Email</th><th>Alamat</th><th>Judul Buku</th><th>Qty</th><th>Harga Satuan</th><th>Ongkos Kirim</th><th>Total Harga</th><th>Status Transaksi</th><th>Status Pembayaran</th><th>DP Amount</th><th>Vendor Ekspedisi</th><th>Nomor Resi</th></tr>`;
-                
-                appData.orders.forEach(order => {
+                const orders = this.getFilteredOrders();
+                if (!orders.length) {
+                    showToast('Tidak ada data pemesanan yang sesuai dengan filter.', 'error');
+                    return;
+                }
+
+                const esc = (v) => escapeHtml(v == null ? '' : v);
+                const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0);
+                const totalShipping = orders.reduce((sum, o) => sum + Number(o.shippingCost || 0), 0);
+                const totalQty = orders.reduce((sum, o) => sum + Number(o.qty || 0), 0);
+                const filterText = [
+                    orderFilters.dateFrom ? `Dari ${formatDateID(orderFilters.dateFrom)}` : '',
+                    orderFilters.dateTo ? `Sampai ${formatDateID(orderFilters.dateTo)}` : '',
+                    orderFilters.status ? `Status: ${orderFilters.status}` : '',
+                    orderFilters.paymentStatus ? `Pembayaran: ${orderFilters.paymentStatus}` : '',
+                    orderFilters.bookId ? `Buku: ${(getBook(orderFilters.bookId) || {}).title || orderFilters.bookId}` : '',
+                    orderSearchQuery ? `Pencarian: ${orderSearchQuery}` : ''
+                ].filter(Boolean).join(' | ') || 'Semua Data';
+
+                let tableHtml = `<table border="1" style="border-collapse:collapse;"><tr><th colspan="18">LAPORAN DATA PEMESANAN YKBUT PRESS</th></tr><tr><td colspan="18">Filter: ${esc(filterText)}</td></tr><tr><td colspan="18">Jumlah Pesanan: ${orders.length} | Total Qty: ${totalQty} | Total Ongkir: ${totalShipping} | Total Nilai Transaksi: ${totalRevenue}</td></tr><tr><th>ID Transaksi</th><th>Tanggal</th><th>Customer ID</th><th>Nama Pemesan</th><th>No HP</th><th>Email</th><th>Alamat</th><th>Judul Buku</th><th>Qty</th><th>Harga Satuan</th><th>Ongkos Kirim</th><th>Subtotal</th><th>Diskon</th><th>Potongan Poin</th><th>Total Bayar</th><th>Status Transaksi</th><th>Status Pembayaran</th><th>Resi</th></tr>`;
+
+                orders.forEach(order => {
                     const book = getBook(order.bookId);
-                    tableHtml += `<tr><td>${order.id}</td><td>${order.date}</td><td>${order.customerName}</td><td>${order.customerPhone}</td><td>${order.customerEmail || '-'}</td><td>${order.customerAddress}</td><td>${book ? book.title : '-'}</td><td>${order.qty}</td><td>${order.unitPrice}</td><td>${order.shippingCost || 0}</td><td>${order.totalPrice}</td><td>${order.status}</td><td>${order.paymentStatus}</td><td>${order.dpAmount}</td><td>${order.shippingVendor || '-'}</td><td>${order.trackingNumber || '-'}</td></tr>`;
+                    tableHtml += `<tr><td>${esc(order.id)}</td><td>${esc(order.date)}</td><td>${esc(order.customerId || '')}</td><td>${esc(order.customerName)}</td><td>${esc(order.customerPhone)}</td><td>${esc(order.customerEmail || '-')}</td><td>${esc(order.customerAddress)}</td><td>${esc(book ? book.title : '-')}</td><td>${Number(order.qty || 0)}</td><td>${Number(order.unitPrice || 0)}</td><td>${Number(order.shippingCost || 0)}</td><td>${Number(order.subtotal || ((Number(order.qty || 0) * Number(order.unitPrice || 0)) + Number(order.shippingCost || 0)))}</td><td>${Number(order.discountAmount || 0)}</td><td>${Number(order.pointsDiscount || 0)}</td><td>${Number(order.totalPrice || 0)}</td><td>${esc(order.status)}</td><td>${esc(order.paymentStatus)}</td><td>${esc(order.trackingNumber || '-')}</td></tr>`;
                 });
                 tableHtml += `</table>`;
-                
+
                 const uri = 'data:application/vnd.ms-excel;base64,';
-                const template = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body>{table}</body></html>';
+                const template = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"><style>th,td{padding:6px;border:1px solid #999;} th{font-weight:bold;}</style></head><body>{table}</body></html>';
                 const base64 = function(s) { return window.btoa(unescape(encodeURIComponent(s))) };
                 const format = function(s, c) { return s.replace(/{(\w+)}/g, function(m, p) { return c[p]; }) };
-                
-                const ctx = { worksheet: 'Worksheet', table: tableHtml };
-                const link = document.createElement("a");
-                link.download = `Data_Pesanan_YKBUT_${new Date().toISOString().slice(0,10)}.xls`;
+                const ctx = { worksheet: 'Laporan Pemesanan', table: tableHtml };
+                const link = document.createElement('a');
+                link.download = `Laporan_Pemesanan_YKBUT_${new Date().toISOString().slice(0,10)}.xls`;
                 link.href = uri + base64(format(template, ctx));
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-                showToast('Export data ke Excel berhasil!');
+                showToast(`Laporan berhasil diexport (${orders.length} pesanan).`, 'success');
+            },
+
+            downloadAllReportPDF() {
+                try {
+                    if (!window.jspdf || !window.jspdf.jsPDF) {
+                        showToast('Library PDF belum siap. Periksa koneksi internet lalu coba lagi.', 'error');
+                        return;
+                    }
+                    const orders = Array.isArray(appData.orders) ? appData.orders.slice() : [];
+                    if (!orders.length) {
+                        showToast('Tidak ada data pemesanan untuk dibuatkan laporan PDF.', 'error');
+                        return;
+                    }
+
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                    const margin = 12;
+                    const pageWidth = doc.internal.pageSize.getWidth();
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    const generatedAt = new Date();
+                    const fmtNum = (v) => Number(v || 0).toLocaleString('id-ID');
+                    const fmtRp = (v) => formatRupiah(Number(v || 0));
+                    const fmtDate = (v) => v ? formatDateID(v) : '-';
+                    const safeText = (v) => String(v ?? '-').replace(/[\r\n]+/g, ' ');
+
+                    // KPI mengikuti definisi yang digunakan dashboard.
+                    const totalOrders = orders.length;
+                    const totalBooksSold = orders.reduce((sum, o) => sum + Number(o.qty || 0), 0);
+                    const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0);
+                    const totalShipping = orders.reduce((sum, o) => sum + Number(o.shippingCost || 0), 0);
+                    const totalCost = orders.reduce((sum, o) => {
+                        const book = getBook(o.bookId);
+                        const bookCost = book ? Number(book.costPrice || 0) : 0;
+                        return sum + (bookCost * Number(o.qty || 0)) + Number(o.shippingCost || 0);
+                    }, 0);
+                    const totalProfit = totalRevenue - totalCost;
+
+                    const statuses = [ORDER_STATUS.NEW, ORDER_STATUS.PROCESSED, ORDER_STATUS.SHIPPING, ORDER_STATUS.COMPLETED];
+                    const statusRows = statuses.map(status => {
+                        const rows = orders.filter(o => o.status === status);
+                        return [status, rows.length, fmtRp(rows.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0))];
+                    });
+
+                    // Sama dengan dashboard: 12 bulan terakhir termasuk bulan berjalan.
+                    const monthlyRows = [];
+                    const now = new Date();
+                    for (let i = 11; i >= 0; i--) {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        const year = d.getFullYear();
+                        const month = d.getMonth();
+                        const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+                        const value = orders.reduce((sum, o) => {
+                            if (!o.date) return sum;
+                            const od = new Date(`${o.date}T00:00:00`);
+                            return (od.getFullYear() === year && od.getMonth() === month) ? sum + Number(o.totalPrice || 0) : sum;
+                        }, 0);
+                        monthlyRows.push([label, fmtRp(value)]);
+                    }
+
+                    // Header laporan.
+                    doc.setFillColor(15, 23, 42);
+                    doc.rect(0, 0, pageWidth, 28, 'F');
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(16);
+                    doc.text('YKBUT PRESS', margin, 11);
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('Laporan Data Pemesanan & Ringkasan Dashboard', margin, 17);
+                    doc.setFontSize(8);
+                    doc.text(`Dibuat: ${generatedAt.toLocaleString('id-ID')}`, pageWidth - margin, 17, { align: 'right' });
+                    doc.text('Seluruh Data Pemesanan', pageWidth - margin, 22, { align: 'right' });
+
+                    let y = 36;
+                    doc.setTextColor(31, 41, 55);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(11);
+                    doc.text('A. Ringkasan Dashboard', margin, y);
+                    y += 5;
+
+                    const kpis = [
+                        ['Total Transaksi', fmtNum(totalOrders)],
+                        ['Total Omset Penjualan', fmtRp(totalRevenue)],
+                        ['Total Biaya', fmtRp(totalCost)],
+                        ['Total Profit', fmtRp(totalProfit)],
+                        ['Buku Terjual', `${fmtNum(totalBooksSold)} Eks`],
+                        ['Total Ongkos Kirim', fmtRp(totalShipping)]
+                    ];
+                    doc.autoTable({
+                        startY: y,
+                        head: [['Indikator', 'Nilai']],
+                        body: kpis,
+                        theme: 'grid',
+                        margin: { left: margin, right: margin },
+                        styles: { fontSize: 8.5, cellPadding: 2.4, textColor: [55, 65, 81] },
+                        headStyles: { fillColor: [29, 78, 216], textColor: 255, fontStyle: 'bold' },
+                        columnStyles: { 0: { cellWidth: 65 }, 1: { cellWidth: 115, halign: 'right' } }
+                    });
+                    y = doc.lastAutoTable.finalY + 8;
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(11);
+                    doc.text('B. Nilai Transaksi per Status', margin, y);
+                    y += 4;
+                    doc.autoTable({
+                        startY: y,
+                        head: [['Status Transaksi', 'Jumlah Pesanan', 'Nilai Transaksi']],
+                        body: statusRows,
+                        theme: 'grid',
+                        margin: { left: margin, right: margin },
+                        styles: { fontSize: 8.5, cellPadding: 2.4 },
+                        headStyles: { fillColor: [29, 78, 216], textColor: 255, fontStyle: 'bold' },
+                        columnStyles: { 1: { halign: 'center', cellWidth: 35 }, 2: { halign: 'right', cellWidth: 50 } }
+                    });
+                    y = doc.lastAutoTable.finalY + 8;
+
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(11);
+                    doc.text('C. Tren Nilai Transaksi 12 Bulan Terakhir', margin, y);
+                    y += 4;
+                    doc.autoTable({
+                        startY: y,
+                        head: [['Bulan', 'Nilai Transaksi']],
+                        body: monthlyRows,
+                        theme: 'grid',
+                        margin: { left: margin, right: margin },
+                        styles: { fontSize: 8.5, cellPadding: 2.2 },
+                        headStyles: { fillColor: [29, 78, 216], textColor: 255, fontStyle: 'bold' },
+                        columnStyles: { 0: { cellWidth: 65 }, 1: { cellWidth: 115, halign: 'right' } }
+                    });
+
+                    // Detail seluruh transaksi.
+                    doc.addPage();
+                    y = 16;
+                    doc.setTextColor(31, 41, 55);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(12);
+                    doc.text('D. Detail Seluruh Data Pemesanan', margin, y);
+                    y += 5;
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(8);
+                    doc.text(`Total ${fmtNum(totalOrders)} transaksi | Total nilai transaksi ${fmtRp(totalRevenue)}`, margin, y);
+                    y += 3;
+
+                    const detailBody = orders.slice().sort((a,b) => String(a.date || '').localeCompare(String(b.date || ''))).map(o => {
+                        const book = getBook(o.bookId);
+                        return [
+                            safeText(o.id),
+                            fmtDate(o.date),
+                            safeText(o.customerId || ''),
+                            safeText(o.customerName),
+                            safeText(book ? book.title : '-'),
+                            fmtNum(o.qty),
+                            fmtRp(o.shippingCost),
+                            fmtRp(o.discountAmount),
+                            fmtRp(o.pointsDiscount),
+                            fmtRp(o.totalPrice),
+                            safeText(o.status),
+                            safeText(o.paymentStatus)
+                        ];
+                    });
+
+                    doc.autoTable({
+                        startY: y + 2,
+                        head: [['ID', 'Tanggal', 'Customer ID', 'Customer', 'Buku', 'Qty', 'Ongkir', 'Diskon', 'Poin', 'Total Bayar', 'Status', 'Pembayaran']],
+                        body: detailBody,
+                        theme: 'grid',
+                        // A4 portrait: area efektif 196 mm (210 - 7 - 7).
+                        // Lebar kolom dijaga total tepat 196 mm agar tabel tidak terpotong di sisi kanan.
+                        margin: { top: 12, right: 7, bottom: 12, left: 7 },
+                        tableWidth: 196,
+                        styles: { fontSize: 5.1, cellPadding: 1.1, overflow: 'linebreak', valign: 'middle', lineColor: [203, 213, 225], lineWidth: 0.1 },
+                        headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 5.1, cellPadding: 1.1, overflow: 'linebreak' },
+                        columnStyles: {
+                            0: { cellWidth: 14 }, 1: { cellWidth: 15 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23 },
+                            4: { cellWidth: 27 }, 5: { cellWidth: 8, halign: 'center' }, 6: { cellWidth: 14, halign: 'right' },
+                            7: { cellWidth: 14, halign: 'right' }, 8: { cellWidth: 14, halign: 'right' }, 9: { cellWidth: 20, halign: 'right' },
+                            10: { cellWidth: 14 }, 11: { cellWidth: 15 }
+                        },
+                        didDrawPage: (data) => {
+                            doc.setFontSize(7);
+                            doc.setTextColor(100, 116, 139);
+                            doc.text(`YKBUT Press | Halaman ${doc.internal.getNumberOfPages()}`, pageWidth - 7, pageHeight - 5, { align: 'right' });
+                        }
+                    });
+
+                    // Footer dan metadata pada semua halaman.
+                    const totalPages = doc.internal.getNumberOfPages();
+                    for (let page = 1; page <= totalPages; page++) {
+                        doc.setPage(page);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setFontSize(7);
+                        doc.setTextColor(100, 116, 139);
+                        doc.text('Dokumen dibuat otomatis oleh YKBUT Press Order Management System', margin, pageHeight - 5);
+                    }
+
+                    const filename = `Laporan_All_YKBUT_Press_${generatedAt.toISOString().slice(0,10)}.pdf`;
+                    doc.save(filename);
+                    showToast(`PDF laporan berhasil dibuat (${totalOrders} transaksi).`, 'success');
+                } catch (error) {
+                    console.error('PDF report error:', error);
+                    showToast('Gagal membuat PDF: ' + (error?.message || 'terjadi kesalahan.'), 'error');
+                }
             },
 
             confirmDeleteOrder(orderId) {
@@ -2294,11 +2590,10 @@
                                 <span>${safe(order.qty)} x ${safe(formatRupiah(order.unitPrice))}</span>
                                 <span>${safe(formatRupiah(itemTotal))}</span>
                             </div>
-                            ${Number(order.shippingCost || 0) > 0 ? `
                             <div class="receipt-row" style="margin-top:4px;">
                                 <span>Ongkos Kirim</span>
-                                <span>${safe(formatRupiah(order.shippingCost))}</span>
-                            </div>` : ''}
+                                <span>${safe(formatRupiah(order.shippingCost || 0))}</span>
+                            </div>
                         </div>
 
                         <div class="receipt-row receipt-total" style="margin-bottom:3px;">
