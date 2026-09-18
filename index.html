@@ -543,7 +543,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -578,7 +578,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -764,6 +764,10 @@
         let orderFilters = { dateFrom: '', dateTo: '', status: '', paymentStatus: '', bookId: '' };
         let bookSearchQuery = '';
         let selectedBookIds = [];
+        // Queue sinkronisasi dibuat durable agar transaksi lokal tidak hilang ketika
+        // Web App/Google Sheets sedang lambat, offline, atau mengembalikan data parsial.
+        let pendingOrderSync = {};
+        let deletedOrderIds = new Set();
 
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
         const formatDateID = (dateValue) => {
@@ -930,6 +934,11 @@
                 this.loadLocalStorage();
                 this.checkAuth();
                 this.syncFromSpreadsheet();
+                // Retry transaksi yang tertunda setiap 60 detik selama aplikasi terbuka.
+                // Tidak mengubah UI, hanya memastikan kegagalan koneksi tidak menjadi kehilangan data.
+                if (!this._pendingSyncTimer) {
+                    this._pendingSyncTimer = setInterval(() => this.syncPendingOrders(), 60000);
+                }
             },
 
             loadLocalStorage() {
@@ -938,11 +947,15 @@
                     const savedBooks = localStorage.getItem('ykbut_books');
                     const savedUsers = localStorage.getItem('ykbut_users');
                     const savedSettings = localStorage.getItem('ykbut_loyalty_settings');
+                    const savedPending = localStorage.getItem('ykbut_pending_order_sync');
+                    const savedDeleted = localStorage.getItem('ykbut_deleted_order_ids');
 
                     if (savedOrders) appData.orders = JSON.parse(savedOrders);
                     if (savedBooks) mockBooks = JSON.parse(savedBooks);
                     if (savedUsers) mockUsers = JSON.parse(savedUsers);
                     if (savedSettings) appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...JSON.parse(savedSettings) };
+                    if (savedPending) pendingOrderSync = JSON.parse(savedPending) || {};
+                    if (savedDeleted) deletedOrderIds = new Set(JSON.parse(savedDeleted) || []);
                     loadReceiptHeader();
                     loadOrderHistories();
                 } catch(e) {
@@ -957,7 +970,51 @@
                     localStorage.setItem('ykbut_books', JSON.stringify(mockBooks));
                     localStorage.setItem('ykbut_users', JSON.stringify(mockUsers));
                     localStorage.setItem('ykbut_loyalty_settings', JSON.stringify(appData.settings || DEFAULT_LOYALTY_SETTINGS));
+                    localStorage.setItem('ykbut_pending_order_sync', JSON.stringify(pendingOrderSync || {}));
+                    localStorage.setItem('ykbut_deleted_order_ids', JSON.stringify(Array.from(deletedOrderIds || [])));
                 } catch(e) { console.error('LocalStorage save error', e); }
+            },
+
+            queueOrderForSync(order) {
+                if (!order || !order.id || deletedOrderIds.has(String(order.id))) return;
+                pendingOrderSync[String(order.id)] = { ...order };
+                this.saveLocalStorage();
+            },
+
+            clearPendingOrder(orderId) {
+                delete pendingOrderSync[String(orderId)];
+                this.saveLocalStorage();
+            },
+
+            async syncPendingOrders() {
+                const ids = Object.keys(pendingOrderSync);
+                if (!ids.length) return { success: 0, failed: 0 };
+                let success = 0, failed = 0;
+                for (const id of ids) {
+                    const order = pendingOrderSync[id];
+                    if (!order) { delete pendingOrderSync[id]; continue; }
+                    try {
+                        const res = await apiService.sendAction('saveOrder', order);
+                        if (res && res.status === 'success') {
+                            if (res.customerId) {
+                                const local = appData.orders.find(o => String(o.id) === String(id));
+                                if (local) {
+                                    local.customerId = res.customerId;
+                                    local.isNewCustomer = false;
+                                }
+                            }
+                            delete pendingOrderSync[id];
+                            success++;
+                        } else {
+                            failed++;
+                        }
+                    } catch (err) {
+                        console.warn('Pending order sync gagal:', id, err);
+                        failed++;
+                    }
+                    this.saveLocalStorage();
+                }
+                return { success, failed };
             },
 
             async syncFromSpreadsheet() {
@@ -969,59 +1026,94 @@
                 if(syncIcon) syncIcon.classList.add('animate-spin');
                 if(badgeText) badgeText.innerText = "Mengecek Koneksi...";
 
+                // Snapshot lokal diambil SEBELUM request. Ini penting: transaksi yang
+                // baru dibuat tetapi belum sempat sampai server tidak boleh dihapus hanya
+                // karena response server datang lebih cepat/lambat.
+                const localOrdersSnapshot = Array.isArray(appData.orders) ? appData.orders.map(o => ({ ...o })) : [];
+                const localOrdersById = new Map(localOrdersSnapshot.map(o => [String(o.id), o]));
                 const serverData = await apiService.fetchAll();
 
                 if(syncIcon) syncIcon.classList.remove('animate-spin');
 
                 if (serverData && serverData.status === 'success') {
-                    
-                    // Simpan referensi order lokal agar tanggal yang sudah diedit tidak hilang
-                    // ketika Spreadsheet lama belum memiliki kolom 'date'.
-                    const localOrdersById = new Map((appData.orders || []).map(o => [String(o.id), o]));
-                    const ordersNeedingDateBackfill = [];
-                    
-                    // PENYELESAIAN MASALAH DATA BERGESER (AUTO-CORRECT)
-                    if (serverData.orders && Array.isArray(serverData.orders) && serverData.orders.length > 0) {
-                        appData.orders = serverData.orders.map(o => {
-                            const validOrderStatuses = Object.values(ORDER_STATUS);
-                            
-                            // Jika kolom 'paymentStatus' di JSON berisi 'Pesanan Baru', berarti data Google Sheets-nya masih pakai susunan lama 
-                            // dan tergeser akibat penambahan fitur Ongkir
-                            if (validOrderStatuses.includes(o.paymentStatus) && !isNaN(o.status) && o.status !== '') {
-                                const vals = Object.values(o);
-                                let extractedTracking = '';
-                                if(vals.length >= 15) extractedTracking = vals[vals.length - 1]; // Mengambil kolom terakhir yg tidak punya header
+                    const rawServerOrders = Array.isArray(serverData.orders) ? serverData.orders : [];
+                    // Kompatibilitas dengan struktur Orders lama tetap dipertahankan.
+                    const serverOrders = rawServerOrders.map(o => {
+                        const validOrderStatuses = Object.values(ORDER_STATUS);
+                        if (validOrderStatuses.includes(o.paymentStatus) && !isNaN(o.status) && o.status !== '') {
+                            const vals = Object.values(o);
+                            return {
+                                id: o.id,
+                                date: o.date,
+                                customerName: o.customerName,
+                                customerPhone: o.customerPhone,
+                                customerEmail: o.customerEmail,
+                                customerAddress: o.customerAddress,
+                                bookId: o.bookId,
+                                qty: o.qty,
+                                unitPrice: o.unitPrice,
+                                shippingCost: parseFloat(o.totalPrice) || 0,
+                                totalPrice: parseFloat(o.status) || 0,
+                                status: o.paymentStatus,
+                                paymentStatus: o.dpAmount,
+                                dpAmount: parseFloat(o.shippingVendor) || 0,
+                                shippingVendor: o.trackingNumber,
+                                trackingNumber: vals.length >= 15 ? vals[vals.length - 1] : ''
+                            };
+                        }
+                        return { ...o };
+                    });
+                    const serverOrdersById = new Map(serverOrders.map(o => [String(o.id), o]));
+                    const mergedOrders = [];
+                    const seen = new Set();
 
-                                return {
-                                    id: o.id,
-                                    date: o.date,
-                                    customerName: o.customerName,
-                                    customerPhone: o.customerPhone,
-                                    customerEmail: o.customerEmail,
-                                    customerAddress: o.customerAddress,
-                                    bookId: o.bookId,
-                                    qty: o.qty,
-                                    unitPrice: o.unitPrice,
-                                    shippingCost: parseFloat(o.totalPrice) || 0,     // Total Harga Lama -> Menjadi Ongkir
-                                    totalPrice: parseFloat(o.status) || 0,           // Status Lama -> Menjadi Total Harga
-                                    status: o.paymentStatus,                         // Pay Status Lama -> Menjadi Status
-                                    paymentStatus: o.dpAmount,                       // DP Lama -> Menjadi Pay Status
-                                    dpAmount: parseFloat(o.shippingVendor) || 0,     // Vendor Lama -> Menjadi DP
-                                    shippingVendor: o.trackingNumber,                // Resi Lama -> Menjadi Vendor
-                                    trackingNumber: extractedTracking                // Kolom kosong lama -> Menjadi Resi
-                                };
-                            }
-
-                            // Jika date belum ada/kosong di server, pertahankan tanggal lokal
-                            // berdasarkan ID transaksi lalu kirim kembali ke Spreadsheet.
-                            const localOrder = localOrdersById.get(String(o.id));
-                            if ((!o.date || String(o.date).trim() === '') && localOrder && localOrder.date) {
-                                o.date = localOrder.date;
-                                ordersNeedingDateBackfill.push(o);
-                            }
-                            return o;
-                        });
+                    // Server tetap menjadi sumber utama untuk data yang sudah tersimpan.
+                    // Namun pending/local-only order selalu dipertahankan sampai server
+                    // benar-benar mengonfirmasi penyimpanannya.
+                    for (const serverOrder of serverOrders) {
+                        const id = String(serverOrder.id);
+                        if (deletedOrderIds.has(id)) continue;
+                        const pending = pendingOrderSync[id];
+                        const local = localOrdersById.get(id);
+                        const chosen = pending ? { ...pending } : { ...serverOrder };
+                        if (!chosen.date && local?.date) chosen.date = local.date;
+                        mergedOrders.push(chosen);
+                        seen.add(id);
                     }
+
+                    // INI PERBAIKAN UTAMA DATA HILANG:
+                    // order yang ada di browser tetapi belum ada di response server tidak
+                    // boleh langsung dibuang. Masukkan kembali ke daftar dan tandai pending.
+                    for (const localOrder of localOrdersSnapshot) {
+                        const id = String(localOrder.id);
+                        if (deletedOrderIds.has(id) || seen.has(id)) continue;
+                        mergedOrders.push({ ...localOrder });
+                        pendingOrderSync[id] = { ...localOrder };
+                        seen.add(id);
+                    }
+
+                    // Pending order yang mungkin sudah tidak ada di appData tetap dipulihkan.
+                    Object.keys(pendingOrderSync).forEach(id => {
+                        if (deletedOrderIds.has(id) || seen.has(id)) return;
+                        if (pendingOrderSync[id]) {
+                            mergedOrders.push({ ...pendingOrderSync[id] });
+                            seen.add(id);
+                        }
+                    });
+
+                    // Jangan pernah menggunakan response server kosong/parsial untuk menghapus
+                    // order lokal yang belum dikonfirmasi tersimpan di server.
+                    appData.orders = mergedOrders;
+
+                    // Pertahankan tanggal lokal jika server masih mengembalikan tanggal kosong.
+                    // Order tersebut tetap masuk antrean agar kolom date terisi di server.
+                    appData.orders.forEach(order => {
+                        const local = localOrdersById.get(String(order.id));
+                        if ((!order.date || String(order.date).trim() === '') && local?.date) {
+                            order.date = local.date;
+                            pendingOrderSync[String(order.id)] = { ...order };
+                        }
+                    });
 
                     if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
                     if (serverData.settings && typeof serverData.settings === 'object') {
@@ -1029,61 +1121,40 @@
                     }
 
                     if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) {
-                        // Google Sheets dapat mengembalikan angka (mis. 12345) sebagai Number,
-                        // sedangkan input password dari form browser selalu berupa String.
-                        // Normalisasi kredensial agar perbandingan login konsisten tanpa mengubah
-                        // password yang tersimpan di Spreadsheet.
                         mockUsers = serverData.users.map(u => ({
                             ...u,
                             username: u.username == null ? '' : String(u.username),
                             password: u.password == null ? '' : String(u.password)
                         }));
-
-                        // Pertahankan akun bawaan admin sebagai fallback apabila sheet Users
-                        // belum memiliki akun admin. Password akun yang sudah ada di Spreadsheet
-                        // tidak pernah ditimpa oleh fallback ini.
                         const hasAdmin = mockUsers.some(u => String(u.username || '').trim().toLowerCase() === 'admin');
-                        if (!hasAdmin) {
-                            mockUsers.unshift({ id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' });
-                        }
+                        if (!hasAdmin) mockUsers.unshift({ id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' });
                     }
 
                     this.saveLocalStorage();
                     appData.orders.forEach(ensureOrderHistory);
                     saveOrderHistories();
 
-                    // Backfill tanggal lokal ke Google Sheets setelah schema 'date' tersedia.
-                    // Ditunggu sampai selesai agar dashboard/refresh berikutnya membaca tanggal yang sama.
-                    if (ordersNeedingDateBackfill.length > 0) {
-                        try {
-                            const results = await Promise.all(ordersNeedingDateBackfill.map(order => apiService.sendAction('saveOrder', order)));
-                            const failed = results.filter(r => !r || r.status !== 'success');
-                            if (failed.length === 0) {
-                                showToast(`${ordersNeedingDateBackfill.length} tanggal pemesanan berhasil disinkronkan ke Google Sheets.`, 'success');
-                            } else {
-                                showToast('Sebagian tanggal belum berhasil dikirim ke Google Sheets. Periksa koneksi Sheets.', 'info');
-                            }
-                        } catch (err) {
-                            console.warn('Backfill tanggal pemesanan gagal:', err);
-                        }
+                    // Kirim semua transaksi yang belum dikonfirmasi server. Diproses satu per
+                    // satu supaya aman untuk Customer ID atomik dan menghindari race condition.
+                    const pendingResult = await this.syncPendingOrders();
+                    if (pendingResult.failed > 0) {
+                        showToast(`${pendingResult.failed} transaksi belum tersinkron. Data tetap aman tersimpan di perangkat dan akan dicoba lagi.`, 'info');
                     }
 
                     if(badge) {
                         badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition";
                         if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-green-500";
-                        if(badgeText) badgeText.innerText = "Terhubung ke Google Sheets";
+                        if(badgeText) badgeText.innerText = pendingResult.failed > 0 ? "Terhubung • Ada antrean sync" : "Terhubung ke Google Sheets";
                     }
-                    showToast('Data berhasil disinkronkan dari Google Sheets!', 'success');
+                    showToast(pendingResult.failed > 0 ? 'Data berhasil dimuat. Transaksi yang belum tersinkron tetap dipertahankan.' : 'Data berhasil disinkronkan dari Google Sheets!', pendingResult.failed > 0 ? 'info' : 'success');
                     this.navigate(this.currentView);
                 } else {
+                    // Jika server gagal, JANGAN mengubah appData.orders. Data lokal tetap
+                    // tampil dan pending queue akan dicoba kembali pada sync berikutnya.
                     if(badge) {
                         badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition";
                         if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
-                        if(badgeText) {
-                            badgeText.innerText = serverData.status === 'unconfigured' 
-                                ? "Belum Terhubung (URL Kosong)" 
-                                : "Belum Terhubung (Klik Diagnosa)";
-                        }
+                        if(badgeText) badgeText.innerText = serverData.status === 'unconfigured' ? "Belum Terhubung (URL Kosong)" : "Belum Terhubung (Data Lokal Dipertahankan)";
                     }
                 }
             },
@@ -2037,13 +2108,21 @@
             async executeDeleteOrder(orderId) {
                 if (currentUser && currentUser.role === 'Viewer') return;
                 appData.orders = appData.orders.filter(o => o.id !== orderId);
+                delete pendingOrderSync[String(orderId)];
+                deletedOrderIds.add(String(orderId));
                 this.saveLocalStorage();
                 this.closeModal();
                 this.renderOrders(document.getElementById('app-content'));
                 
                 showToast(`Menghapus pesanan ${orderId} dari Google Sheets...`, 'info');
-                await apiService.sendAction('deleteOrder', { id: orderId });
-                showToast(`Pesanan ${orderId} berhasil dihapus!`, 'success');
+                const res = await apiService.sendAction('deleteOrder', { id: orderId });
+                if (res && res.status === 'success') {
+                    deletedOrderIds.delete(String(orderId));
+                    this.saveLocalStorage();
+                    showToast(`Pesanan ${orderId} berhasil dihapus!`, 'success');
+                } else {
+                    showToast(`Pesanan ${orderId} dihapus dari tampilan, tetapi penghapusan server belum berhasil.`, 'info');
+                }
             },
 
             openEditOrderModal(orderId) {
@@ -2163,13 +2242,18 @@
                     order.dpAmount = order.totalPrice;
                 }
 
-                this.saveLocalStorage();
+                // Order yang diedit tidak lagi dianggap customer baru. Ini mencegah server
+                // membuat Customer ID baru setiap kali status/tanggal diedit.
+                order.isNewCustomer = false;
+                this.queueOrderForSync(order);
                 this.closeModal();
                 this.renderOrders(document.getElementById('app-content'));
 
                 showToast('Mengirim update ke Google Sheets...', 'info');
                 const res = await apiService.sendAction('saveOrder', order);
                 if(res && res.status === 'success') {
+                    delete pendingOrderSync[String(order.id)];
+                    this.saveLocalStorage();
                     const verify = await verifyOrderDateOnServer(order.id, order.date);
                     if (verify.ok) {
                         showToast('Perubahan & tanggal pemesanan berhasil tersimpan di Google Sheets!', 'success');
@@ -2473,16 +2557,18 @@
                     };
                     if (pStatus !== PAYMENT_STATUS.UNPAID) orderHistories[newOrder.id].payment.push({ status: pStatus, date: newOrder.date });
                     saveOrderHistories();
-                    this.saveLocalStorage();
+                    this.queueOrderForSync(newOrder);
                     showToast('Pesanan dibuat! Menyimpan ke Google Sheets...', 'info');
                     
                     app.navigate('orders');
                     
                     const resOrder = await apiService.sendAction('saveOrder', newOrder);
-                    if (resOrder && resOrder.status === 'success' && resOrder.customerId) {
-                        newOrder.customerId = resOrder.customerId;
+                    if (resOrder && resOrder.status === 'success') {
+                        if (resOrder.customerId) newOrder.customerId = resOrder.customerId;
+                        newOrder.isNewCustomer = false;
                         const localCustomerIdInput = document.getElementById('cust-id');
                         if (localCustomerIdInput) localCustomerIdInput.value = resOrder.customerId;
+                        delete pendingOrderSync[String(newOrder.id)];
                         this.saveLocalStorage();
                     }
                     let resBook = null;
