@@ -543,7 +543,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -578,7 +578,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -769,6 +769,9 @@
         let pendingOrderSync = {};
         let deletedOrderIds = new Set();
         let confirmedServerOrders = null;
+        let knownServerOrderIds = new Set();
+        let lastServerOrderCount = null;
+        let syncInProgress = false;
 
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
         const formatDateID = (dateValue) => {
@@ -950,6 +953,7 @@
                     const savedSettings = localStorage.getItem('ykbut_loyalty_settings');
                     const savedPending = localStorage.getItem('ykbut_pending_order_sync');
                     const savedDeleted = localStorage.getItem('ykbut_deleted_order_ids');
+                    const savedKnownServerIds = localStorage.getItem('ykbut_known_server_order_ids');
 
                     if (savedOrders) appData.orders = JSON.parse(savedOrders);
                     if (savedBooks) mockBooks = JSON.parse(savedBooks);
@@ -957,6 +961,8 @@
                     if (savedSettings) appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...JSON.parse(savedSettings) };
                     if (savedPending) pendingOrderSync = JSON.parse(savedPending) || {};
                     if (savedDeleted) deletedOrderIds = new Set(JSON.parse(savedDeleted) || []);
+                    if (savedKnownServerIds) knownServerOrderIds = new Set(JSON.parse(savedKnownServerIds) || []);
+                    lastServerOrderCount = knownServerOrderIds.size || null;
                     loadReceiptHeader();
                     loadOrderHistories();
                 } catch(e) {
@@ -973,6 +979,7 @@
                     localStorage.setItem('ykbut_loyalty_settings', JSON.stringify(appData.settings || DEFAULT_LOYALTY_SETTINGS));
                     localStorage.setItem('ykbut_pending_order_sync', JSON.stringify(pendingOrderSync || {}));
                     localStorage.setItem('ykbut_deleted_order_ids', JSON.stringify(Array.from(deletedOrderIds || [])));
+                    localStorage.setItem('ykbut_known_server_order_ids', JSON.stringify(Array.from(knownServerOrderIds || [])));
                 } catch(e) { console.error('LocalStorage save error', e); }
             },
 
@@ -997,16 +1004,25 @@
                     try {
                         const res = await apiService.sendAction('saveOrder', order);
                         if (res && res.status === 'success') {
-                            if (res.customerId) {
+                            const finalId = String(res.id || id);
+                            if (finalId !== String(id)) {
                                 const local = appData.orders.find(o => String(o.id) === String(id));
+                                if (local) local.id = finalId;
+                                const hist = orderHistories[id];
+                                if (hist) { orderHistories[finalId] = hist; delete orderHistories[id]; saveOrderHistories(); }
+                                pendingOrderSync[finalId] = { ...order, id: finalId, isNewOrder:false };
+                                delete pendingOrderSync[id];
+                            }
+                            if (res.customerId) {
+                                const local = appData.orders.find(o => String(o.id) === String(finalId));
                                 if (local) {
                                     local.customerId = res.customerId;
                                     local.isNewCustomer = false;
                                 }
                             }
                             if (Array.isArray(confirmedServerOrders)) {
-                                const idx = confirmedServerOrders.findIndex(o => String(o.id) === String(id));
-                                const saved = { ...order, ...(res.customerId ? { customerId: res.customerId, isNewCustomer: false } : {}) };
+                                const idx = confirmedServerOrders.findIndex(o => String(o.id) === String(finalId));
+                                const saved = { ...order, id: finalId, isNewOrder:false, ...(res.customerId ? { customerId: res.customerId, isNewCustomer: false } : {}) };
                                 if (idx >= 0) confirmedServerOrders[idx] = saved; else confirmedServerOrders.push(saved);
                             }
                             delete pendingOrderSync[id];
@@ -1024,6 +1040,8 @@
             },
 
             async syncFromSpreadsheet() {
+                if (syncInProgress) return;
+                syncInProgress = true;
                 const badgeText = document.getElementById('sync-status-text');
                 const badgeDot = document.getElementById('sync-status-dot');
                 const badge = document.getElementById('sync-status-badge');
@@ -1070,8 +1088,50 @@
                         return { ...o };
                     });
                     const serverOrdersById = new Map(serverOrders.map(o => [String(o.id), o]));
+
+                    // GUARD DATA INTEGRITY: jangan pernah menerima snapshot server yang
+                    // tiba-tiba kehilangan order yang sebelumnya sudah diketahui. Ini melindungi
+                    // aplikasi dari response parsial, timeout/proxy aneh, deployment yang salah,
+                    // atau race condition saat Sheets sedang berubah. Penurunan jumlah hanya boleh
+                    // terjadi untuk ID yang memang sengaja dihapus melalui aplikasi.
+                    const incomingServerIds = new Set(serverOrders.map(o => String(o.id || '').trim()).filter(Boolean));
+                    const duplicateIds = serverOrders.length !== incomingServerIds.size;
+                    // Pada migrasi pertama V13, V12 belum menyimpan baseline server. Gunakan
+                    // ID order lokal yang bukan pending sebagai baseline tambahan. Ini mencegah
+                    // V13 menerima response server yang tiba-tiba hanya berisi sebagian data.
+                    const baselineIds = new Set(knownServerOrderIds);
+                    if (baselineIds.size === 0 && localOrdersSnapshot.length > 0) {
+                        localOrdersSnapshot.forEach(o => {
+                            const id = String(o.id || '').trim();
+                            if (id && !pendingOrderSync[id] && !deletedOrderIds.has(id)) baselineIds.add(id);
+                        });
+                    }
+                    const unexpectedMissing = Array.from(baselineIds).filter(id => !incomingServerIds.has(id) && !deletedOrderIds.has(id));
+                    const serverSnapshotSuspicious = duplicateIds || (baselineIds.size > 0 && unexpectedMissing.length > 0);
+
+                    if (serverSnapshotSuspicious) {
+                        confirmedServerOrders = Array.isArray(confirmedServerOrders) ? confirmedServerOrders : [];
+                        if(badge) {
+                            badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200";
+                            if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-red-500";
+                            if(badgeText) badgeText.innerText = "Sync ditahan • Data server tidak lengkap";
+                        }
+                        console.error('SYNC DITAHAN: snapshot Orders tidak konsisten.', {
+                            previousCount: baselineIds.size,
+                            incomingCount: serverOrders.length,
+                            unexpectedMissing,
+                            duplicateIds
+                        });
+                        showToast(`Sinkronisasi ditahan: ${unexpectedMissing.length || 'ada'} data pemesanan terdeteksi hilang dari response server. Data aplikasi dipertahankan.`, 'error');
+                        syncInProgress = false;
+                        return;
+                    }
+
                     // Snapshot authoritative dari Google Sheets untuk perhitungan Dashboard.
                     confirmedServerOrders = serverOrders.map(o => ({ ...o }));
+                    knownServerOrderIds = incomingServerIds;
+                    lastServerOrderCount = serverOrders.length;
+                    this.saveLocalStorage();
                     const mergedOrders = [];
                     const seen = new Set();
 
@@ -1168,6 +1228,7 @@
                         if(badgeText) badgeText.innerText = serverData.status === 'unconfigured' ? "Belum Terhubung (URL Kosong)" : "Belum Terhubung (Data Lokal Dipertahankan)";
                     }
                 }
+                syncInProgress = false;
             },
 
             checkAuth() {
@@ -2221,7 +2282,9 @@
                 showToast(`Menghapus pesanan ${orderId} dari Google Sheets...`, 'info');
                 const res = await apiService.sendAction('deleteOrder', { id: orderId });
                 if (res && res.status === 'success') {
-                    deletedOrderIds.delete(String(orderId));
+                    // Tombstone sengaja dipertahankan agar order yang sudah dihapus tidak
+                    // muncul kembali saat merge/sync berikutnya. ID transaksi baru tidak
+                    // pernah dipakai ulang karena server membuat ID secara atomik.
                     this.saveLocalStorage();
                     showToast(`Pesanan ${orderId} berhasil dihapus!`, 'success');
                 } else {
@@ -2622,7 +2685,9 @@
                     }
 
                     const newOrder = {
-                        id: `ORD-${String(appData.orders.length + 1).padStart(3, '0')}`,
+                        id: `ORD-PENDING-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+                        clientRequestId: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `REQ-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                        isNewOrder: true,
                         date: document.getElementById('order-date').value || todayISO(),
                         customerId: customerId,
                         isNewCustomer: !isExistingCustomer,
@@ -2666,13 +2731,29 @@
                     
                     app.navigate('orders');
                     
+                    const originalLocalOrderId = newOrder.id;
                     const resOrder = await apiService.sendAction('saveOrder', newOrder);
                     if (resOrder && resOrder.status === 'success') {
+                        const finalOrderId = String(resOrder.id || newOrder.id);
+                        if (finalOrderId !== originalLocalOrderId) {
+                            const idx = appData.orders.findIndex(o => String(o.id) === originalLocalOrderId);
+                            if (idx >= 0) appData.orders[idx] = { ...appData.orders[idx], id: finalOrderId };
+                            const hist = orderHistories[originalLocalOrderId];
+                            if (hist) { orderHistories[finalOrderId] = hist; delete orderHistories[originalLocalOrderId]; saveOrderHistories(); }
+                            if (pendingOrderSync[originalLocalOrderId]) { pendingOrderSync[finalOrderId] = { ...pendingOrderSync[originalLocalOrderId], id: finalOrderId, isNewOrder:false }; delete pendingOrderSync[originalLocalOrderId]; }
+                            newOrder.id = finalOrderId;
+                        }
                         if (resOrder.customerId) newOrder.customerId = resOrder.customerId;
                         newOrder.isNewCustomer = false;
+                        newOrder.isNewOrder = false;
                         const localCustomerIdInput = document.getElementById('cust-id');
-                        if (localCustomerIdInput) localCustomerIdInput.value = resOrder.customerId;
+                        if (localCustomerIdInput && resOrder.customerId) localCustomerIdInput.value = resOrder.customerId;
                         delete pendingOrderSync[String(newOrder.id)];
+                        if (Array.isArray(confirmedServerOrders)) {
+                            const ci = confirmedServerOrders.findIndex(o => String(o.id) === String(newOrder.id));
+                            if (ci >= 0) confirmedServerOrders[ci] = { ...newOrder }; else confirmedServerOrders.push({ ...newOrder });
+                            knownServerOrderIds.add(String(newOrder.id));
+                        }
                         this.saveLocalStorage();
                     }
                     let resBook = null;
@@ -3451,17 +3532,29 @@ function handleRequest(e) {
     } else if (action === 'saveOrder') {
       if (!postData) throw new Error('Data pesanan tidak ditemukan.');
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      var orderSheet = ss.getSheetByName('Orders');
       if (postData.date !== undefined && postData.date !== null && String(postData.date).trim() !== '') postData.date = String(postData.date).trim();
-      // Untuk customer baru, server selalu menjadi sumber ID final. Ini mencegah duplicate
-      // meskipun dua perangkat mengirim transaksi hampir bersamaan.
-      if (postData.isNewCustomer === true || !postData.customerId) {
-        postData.customerId = reserveNextCustomerId(ss.getSheetByName('Orders'));
+
+      // Idempotency: retry dari browser dengan clientRequestId yang sama harus
+      // mengembalikan transaksi yang sama, bukan membuat transaksi kedua.
+      var existingByRequest = findOrderByClientRequestId(orderSheet, postData.clientRequestId);
+      if (existingByRequest) {
+        result = { status:'success', id:existingByRequest.id, date:existingByRequest.date || '', customerId:existingByRequest.customerId || '' };
+      } else {
+        // Order BARU selalu mendapat ID dari server. ID sementara browser tidak pernah
+        // dipakai sebagai ID permanen, sehingga tidak ada collision antar perangkat.
+        if (postData.isNewOrder === true) {
+          postData.id = reserveNextOrderId(orderSheet);
+        }
+        if (postData.isNewCustomer === true || !postData.customerId) {
+          postData.customerId = reserveNextCustomerId(orderSheet);
+        }
+        postData.customerId = String(postData.customerId).trim().toUpperCase();
+        validateCustomerIdConsistency(orderSheet, postData);
+        upsertRowDynamic(orderSheet,'id',postData.id,postData);
+        SpreadsheetApp.flush();
+        result = { status:'success', id:postData.id, date:postData.date || '', customerId:postData.customerId };
       }
-      postData.customerId = String(postData.customerId).trim().toUpperCase();
-      validateCustomerIdConsistency(ss.getSheetByName('Orders'), postData);
-      upsertRowDynamic(ss.getSheetByName('Orders'),'id',postData.id,postData);
-      SpreadsheetApp.flush();
-      result = { status:'success', id:postData.id, date:postData.date || '', customerId:postData.customerId };
     } else if (action === 'deleteOrder') {
       deleteRowById(ss,'Orders',postData.id); result = {status:'success'};
     } else if (action === 'saveBook') {
@@ -3479,6 +3572,50 @@ function handleRequest(e) {
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({status:'error',message:err.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally { lock.releaseLock(); }
+}
+
+function findOrderByClientRequestId(sheet, requestId) {
+  requestId = String(requestId || '').trim();
+  if (!requestId || sheet.getLastRow() <= 1) return null;
+  var lastCol = sheet.getLastColumn();
+  var headers = sheet.getRange(1,1,1,lastCol).getValues()[0].map(function(h){return String(h).trim();});
+  var reqIdx = headers.indexOf('clientRequestId');
+  var idIdx = headers.indexOf('id');
+  var dateIdx = headers.indexOf('date');
+  var custIdx = headers.indexOf('customerId');
+  if (reqIdx === -1 || idIdx === -1) return null;
+  var rows = sheet.getRange(2,1,sheet.getLastRow()-1,lastCol).getValues();
+  for (var i=0;i<rows.length;i++) {
+    if (String(rows[i][reqIdx] || '').trim() === requestId) {
+      return { id:String(rows[i][idIdx] || ''), date:dateIdx === -1 ? '' : rows[i][dateIdx], customerId:custIdx === -1 ? '' : String(rows[i][custIdx] || '') };
+    }
+  }
+  return null;
+}
+
+function reserveNextOrderId(sheet) {
+  var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+  var headers = lastCol ? sheet.getRange(1,1,1,lastCol).getValues()[0].map(function(h){return String(h).trim();}) : [];
+  var idx = headers.indexOf('id'), max = 0;
+  if (idx !== -1 && lastRow > 1) {
+    sheet.getRange(2,idx+1,lastRow-1,1).getValues().forEach(function(row){
+      var m = String(row[0] || '').trim().match(/^ORD-(\d+)$/i);
+      if (m) max = Math.max(max, parseInt(m[1],10) || 0);
+    });
+  }
+  var candidate;
+  do { max++; candidate = 'ORD-' + String(max).padStart(3,'0'); } while (orderIdExists(sheet,candidate));
+  return candidate;
+}
+
+function orderIdExists(sheet, id) {
+  var lastRow=sheet.getLastRow(), lastCol=sheet.getLastColumn();
+  if(lastRow<=1 || lastCol===0) return false;
+  var headers=sheet.getRange(1,1,1,lastCol).getValues()[0].map(function(h){return String(h).trim();});
+  var idx=headers.indexOf('id'); if(idx===-1) return false;
+  var vals=sheet.getRange(2,idx+1,lastRow-1,1).getValues();
+  for(var i=0;i<vals.length;i++) if(String(vals[i][0] || '')===String(id)) return true;
+  return false;
 }
 
 function reserveNextCustomerId(sheet) {
@@ -3525,7 +3662,7 @@ function validateCustomerIdConsistency(sheet, order) {
 
 function ensureOrdersSchema(ss) {
   var sheet = ss.getSheetByName('Orders');
-  var requiredHeaders = ['id','date','customerId','customerName','customerPhone','customerEmail','customerAddress','bookId','qty','unitPrice','shippingCost','subtotal','discountPercent','discountAmount','pointsUsed','pointsDiscount','pointsEarned','totalPrice','status','paymentStatus','dpAmount','shippingVendor','trackingNumber'];
+  var requiredHeaders = ['id','date','clientRequestId','customerId','customerName','customerPhone','customerEmail','customerAddress','bookId','qty','unitPrice','shippingCost','subtotal','discountPercent','discountAmount','pointsUsed','pointsDiscount','pointsEarned','totalPrice','status','paymentStatus','dpAmount','shippingVendor','trackingNumber'];
   if (!sheet) { sheet=ss.insertSheet('Orders'); sheet.appendRow(requiredHeaders); return; }
   var data=sheet.getDataRange().getValues();
   if (data.length===0 || data[0].length===0) { sheet.clear(); sheet.appendRow(requiredHeaders); return; }
@@ -3573,10 +3710,19 @@ function getSheetData(ss,sheetName){
 function upsertRowDynamic(sheet,keyColumnName,keyValue,rowValuesObj){
   var data=sheet.getDataRange().getValues();
   if(data.length===0||data[0].length===0){var newHeaders=Object.keys(rowValuesObj);sheet.appendRow(newHeaders);sheet.appendRow(newHeaders.map(function(h){return rowValuesObj[h]!==undefined?rowValuesObj[h]:'';}));return;}
-  var headers=data[0].map(function(h){return String(h).trim();}); var keyIndex=headers.indexOf(keyColumnName); var rowArray=headers.map(function(header){return rowValuesObj[header]!==undefined?rowValuesObj[header]:'';});
-  if(keyIndex!==-1&&data.length>1){for(var r=1;r<data.length;r++){if(String(data[r][keyIndex])===String(keyValue)){sheet.getRange(r+1,1,1,rowArray.length).setValues([rowArray]);return;}}}
+  var headers=data[0].map(function(h){return String(h).trim();});
+  var keyIndex=headers.indexOf(keyColumnName);
+  var existingIndex=-1;
+  if(keyIndex!==-1&&data.length>1){for(var r=1;r<data.length;r++){if(String(data[r][keyIndex])===String(keyValue)){existingIndex=r;break;}}}
+  var existingRow=existingIndex>=0?data[existingIndex]:null;
+  var rowArray=headers.map(function(header,idx){
+    if(rowValuesObj[header]!==undefined) return rowValuesObj[header];
+    return existingRow ? existingRow[idx] : '';
+  });
+  if(existingIndex>=0){sheet.getRange(existingIndex+1,1,1,rowArray.length).setValues([rowArray]);return;}
   sheet.appendRow(rowArray);
 }
+
 function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);if(sheet){var data=sheet.getDataRange().getValues();if(data.length<2)return;var headers=data[0];var keyIndex=headers.indexOf('id');if(keyIndex===-1)return;for(var i=data.length-1;i>=1;i--){if(String(data[i][keyIndex])===String(id))sheet.deleteRow(i+1);}}}
 `
 
