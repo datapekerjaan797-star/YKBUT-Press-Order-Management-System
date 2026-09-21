@@ -14,6 +14,8 @@
     <!-- PDF Report: jsPDF + AutoTable -->
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+    <!-- SheetJS: membaca file Excel .xlsx/.xls untuk fitur Import Data -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -543,7 +545,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -578,7 +580,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -907,7 +909,7 @@
             },
             async sendAction(action, payload) {
                 try {
-                    if (action === 'saveOrder' || action === 'saveSettings') {
+                    if (action === 'saveOrder' || action === 'saveSettings' || action === 'importOrders') {
                         const setup = await this.sendRawAction('setupOrders', {});
                         if (!setup || setup.status !== 'success') {
                             return { status:'error', message:'Schema Orders gagal disiapkan: ' + (setup?.message || 'deployment Apps Script belum diperbarui') };
@@ -929,6 +931,44 @@
                 const actual = found && found.date != null ? String(found.date).trim().slice(0,10) : '';
                 return { ok:actual === String(expectedDate || '').trim().slice(0,10), actual, expected:expectedDate };
             } catch(error) { return { ok:false, reason:'exception', error }; }
+        }
+
+        function getOrderDisplayId(order) {
+            if (!order) return '';
+            const rawId = String(order.id || '');
+            if (!rawId.startsWith('ORD-PENDING-')) return rawId;
+            const n = Number(order.pendingDisplayNo);
+            if (Number.isFinite(n) && n > 0) return `ORD-${String(Math.floor(n)).padStart(3, '0')}`;
+            return 'ORD-001';
+        }
+
+        function assignPendingDisplayIds() {
+            const orders = Array.isArray(appData.orders) ? appData.orders : [];
+            const used = new Set();
+            let maxNo = 0;
+            orders.forEach(o => {
+                const id = String(o?.id || '');
+                const m = /^ORD-(\d+)$/.exec(id);
+                if (m) {
+                    const n = Number(m[1]);
+                    if (Number.isFinite(n)) {
+                        used.add(n);
+                        if (n > maxNo) maxNo = n;
+                    }
+                }
+            });
+            orders.forEach(o => {
+                if (!String(o?.id || '').startsWith('ORD-PENDING-')) return;
+                const existing = Number(o.pendingDisplayNo);
+                if (Number.isFinite(existing) && existing > 0 && !used.has(existing)) {
+                    used.add(existing);
+                    if (existing > maxNo) maxNo = existing;
+                    return;
+                }
+                do { maxNo += 1; } while (used.has(maxNo));
+                o.pendingDisplayNo = maxNo;
+                used.add(maxNo);
+            });
         }
 
         const app = {
@@ -956,6 +996,7 @@
                     const savedKnownServerIds = localStorage.getItem('ykbut_known_server_order_ids');
 
                     if (savedOrders) appData.orders = JSON.parse(savedOrders);
+                    assignPendingDisplayIds();
                     if (savedBooks) mockBooks = JSON.parse(savedBooks);
                     if (savedUsers) mockUsers = JSON.parse(savedUsers);
                     if (savedSettings) appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...JSON.parse(savedSettings) };
@@ -1107,29 +1148,75 @@
                         });
                     }
                     const unexpectedMissing = Array.from(baselineIds).filter(id => !incomingServerIds.has(id) && !deletedOrderIds.has(id));
-                    const serverSnapshotSuspicious = duplicateIds || (baselineIds.size > 0 && unexpectedMissing.length > 0);
+
+                    // V15: validasi kelengkapan harus mengacu pada metadata snapshot dari server,
+                    // bukan daftar ID lama di localStorage. Daftar knownServerOrderIds dapat menjadi
+                    // stale setelah migrasi versi aplikasi, penghapusan manual di Sheets, atau
+                    // pergantian deployment. Selama Apps Script menyatakan snapshot lengkap dan
+                    // jumlah row yang dikirim sama dengan jumlah Orders di server, snapshot dianggap
+                    // authoritative dan baseline lama direfresh. Ini menghilangkan false-positive
+                    // "Sync ditahan" seperti kasus 2 ID lama yang tidak lagi ada di response.
+                    const serverReportsComplete = serverData.ordersSnapshotComplete === true;
+                    const serverReportedCount = Number(serverData.ordersCount);
+                    const serverCountMatches = Number.isFinite(serverReportedCount) && serverReportedCount === serverOrders.length;
+                    const structurallyValidSnapshot = !duplicateIds && serverReportsComplete && serverCountMatches;
+                    const serverSnapshotSuspicious = !structurallyValidSnapshot && (duplicateIds || (baselineIds.size > 0 && unexpectedMissing.length > 0));
 
                     if (serverSnapshotSuspicious) {
-                        confirmedServerOrders = Array.isArray(confirmedServerOrders) ? confirmedServerOrders : [];
+                        // IMPORTANT: jangan berhenti dengan dataset kosong hanya karena response
+                        // server parsial. Versi sebelumnya melakukan return di sini, sehingga ketika
+                        // localStorage tidak memiliki snapshot order yang lengkap, Dashboard dapat
+                        // jatuh menjadi 0 walaupun response server sebenarnya masih berisi banyak order.
+                        // Sekarang kita membuat SAFE MERGE: semua order yang datang dari server tetap
+                        // ditampilkan, sementara order yang sebelumnya sudah diketahui tetapi hilang
+                        // dari response tetap dipertahankan dari snapshot lokal/confirmed sebelumnya.
+                        const priorOrders = Array.isArray(confirmedServerOrders) && confirmedServerOrders.length
+                            ? confirmedServerOrders
+                            : localOrdersSnapshot;
+                        const safeMap = new Map();
+                        priorOrders.forEach(o => {
+                            const id = String(o?.id || '').trim();
+                            if (id && !deletedOrderIds.has(id)) safeMap.set(id, { ...o });
+                        });
+                        serverOrders.forEach(o => {
+                            const id = String(o?.id || '').trim();
+                            if (id && !deletedOrderIds.has(id)) safeMap.set(id, { ...o });
+                        });
+                        Object.keys(pendingOrderSync || {}).forEach(id => {
+                            if (deletedOrderIds.has(String(id))) return;
+                            const pending = pendingOrderSync[id];
+                            if (pending) safeMap.set(String(id), { ...pending });
+                        });
+
+                        confirmedServerOrders = Array.from(safeMap.values());
+                        knownServerOrderIds = new Set(confirmedServerOrders.map(o => String(o.id)).filter(Boolean));
+                        lastServerOrderCount = serverOrders.length;
+                        this.saveLocalStorage();
+
                         if(badge) {
-                            badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200";
-                            if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-red-500";
-                            if(badgeText) badgeText.innerText = "Sync ditahan • Data server tidak lengkap";
+                            badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200";
+                            if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-amber-500";
+                            if(badgeText) badgeText.innerText = "Sync ditahan • Data server perlu dicek";
                         }
-                        console.error('SYNC DITAHAN: snapshot Orders tidak konsisten.', {
+                        console.error('SYNC DITAHAN: snapshot Orders tidak konsisten. Safe merge dipakai.', {
                             previousCount: baselineIds.size,
                             incomingCount: serverOrders.length,
+                            safeCount: confirmedServerOrders.length,
                             unexpectedMissing,
                             duplicateIds
                         });
-                        showToast(`Sinkronisasi ditahan: ${unexpectedMissing.length || 'ada'} data pemesanan terdeteksi hilang dari response server. Data aplikasi dipertahankan.`, 'error');
+                        showToast(`Response server tidak lengkap (${unexpectedMissing.length || 'ada'} data tidak ditemukan). Data yang sudah ada dipertahankan.`, 'error');
                         syncInProgress = false;
+                        this.navigate(this.currentView);
                         return;
                     }
 
                     // Snapshot authoritative dari Google Sheets untuk perhitungan Dashboard.
                     confirmedServerOrders = serverOrders.map(o => ({ ...o }));
-                    knownServerOrderIds = incomingServerIds;
+                    // Snapshot server yang tervalidasi menjadi baseline baru. Jangan menggabungkan
+                    // ID lama dari localStorage karena ID yang sudah dihapus/diubah di server dapat
+                    // membuat guard kembali memunculkan false-positive pada sync berikutnya.
+                    knownServerOrderIds = new Set(incomingServerIds);
                     lastServerOrderCount = serverOrders.length;
                     this.saveLocalStorage();
                     const mergedOrders = [];
@@ -1415,7 +1502,8 @@
                 // saat menunggu sinkronisasi. Ini mencegah localStorage lama menjadi sumber
                 // angka hantu pada KPI Dashboard.
                 if (!Array.isArray(confirmedServerOrders)) return Array.isArray(appData.orders) ? appData.orders : [];
-                const merged = confirmedServerOrders.map(o => ({ ...o }));
+                const base = confirmedServerOrders.length > 0 ? confirmedServerOrders : (Array.isArray(appData.orders) ? appData.orders : []);
+                const merged = base.map(o => ({ ...o }));
                 const seen = new Set(merged.map(o => String(o.id)));
                 Object.keys(pendingOrderSync || {}).forEach(id => {
                     if (deletedOrderIds.has(String(id)) || seen.has(String(id))) return;
@@ -1759,7 +1847,7 @@
                     const bookTitle = book ? book.title : '<span class="text-red-500">Buku tidak ditemukan</span>';
                     return `
                     <tr class="border-b hover:bg-gray-50 transition-colors">
-                        <td class="py-3 px-4 text-sm font-medium text-gray-800">${order.id}</td>
+                        <td class="py-3 px-4 text-sm font-medium text-gray-800">${getOrderDisplayId(order)}</td>
                         <td class="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
                             <span class="font-medium text-gray-700">${formatDateID(order.date)}</span>
                         </td>
@@ -1818,6 +1906,12 @@
                                 <button onclick="app.exportToExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center shadow" title="Export laporan sesuai filter aktif">
                                     <i class="ph ph-file-xls mr-2 text-lg"></i> Export Laporan
                                 </button>
+                                ${currentUser && currentUser.role !== 'Viewer' ? `<button onclick="app.openImportExcel()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors flex items-center shadow" title="Import atau update data pemesanan dari Excel">
+                                    <i class="ph ph-upload-simple mr-2 text-lg"></i> Import Excel
+                                </button>
+                                ${currentUser && currentUser.role !== 'Viewer' ? `<button onclick="app.downloadImportTemplate()" class="bg-white text-blue-700 px-3 py-2 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors flex items-center border border-blue-200" title="Download template Excel untuk import">
+                                    <i class="ph ph-download-simple mr-2"></i> Template
+                                </button>` : ''}` : ''}
                                 <button onclick="app.downloadAllReportPDF()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 transition-colors flex items-center shadow" title="Download laporan seluruh data dalam PDF A4 portrait">
                                     <i class="ph ph-file-pdf mr-2 text-lg"></i> PDF Laporan All
                                 </button>
@@ -1946,7 +2040,7 @@
                             <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
                                 <div>
                                     <h3 class="font-bold text-lg text-gray-800">${isTransaction ? 'Timeline Status Transaksi' : 'Timeline Pembayaran'}</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">${order.id} · ${order.customerName}</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">${getOrderDisplayId(order)} · ${order.customerName}</p>
                                 </div>
                                 <button onclick="app.closeModal()" class="text-gray-500 hover:text-red-500 transition"><i class="ph ph-x text-xl"></i></button>
                             </div>
@@ -1999,6 +2093,244 @@
                 this.renderOrders(document.getElementById('app-content'));
             },
 
+            makeImportRequestId(index = 0) {
+                const seed = `${Date.now()}-${index}-${Math.random().toString(36).slice(2,10)}`;
+                return `IMPORT-${seed}`;
+            },
+
+            normalizeImportHeader(value) {
+                return String(value ?? '')
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[\s_\-\/().]+/g, '');
+            },
+
+            getImportValue(row, aliases) {
+                const keys = Object.keys(row || {});
+                const normalized = new Map(keys.map(k => [this.normalizeImportHeader(k), k]));
+                for (const alias of aliases) {
+                    const key = normalized.get(this.normalizeImportHeader(alias));
+                    if (key !== undefined) return row[key];
+                }
+                return undefined;
+            },
+
+            parseImportedDate(value) {
+                if (value === undefined || value === null || value === '') return '';
+                if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                    const d = new Date(value.getTime() - value.getTimezoneOffset() * 60000);
+                    return d.toISOString().slice(0,10);
+                }
+                if (typeof value === 'number' && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code) {
+                    const parsed = XLSX.SSF.parse_date_code(value);
+                    if (parsed && parsed.y && parsed.m && parsed.d) return `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}`;
+                }
+                const raw = String(value).trim();
+                if (/^\d{4}-\d{1,2}-\d{1,2}/.test(raw)) {
+                    const m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+                    return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+                }
+                const dmY = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+                if (dmY) return `${dmY[3]}-${String(dmY[2]).padStart(2,'0')}-${String(dmY[1]).padStart(2,'0')}`;
+                const parsedDate = new Date(raw);
+                if (!Number.isNaN(parsedDate.getTime())) {
+                    const d = new Date(parsedDate.getTime() - parsedDate.getTimezoneOffset() * 60000);
+                    return d.toISOString().slice(0,10);
+                }
+                return '';
+            },
+
+            normalizeImportOrder(row, index) {
+                const get = (aliases) => this.getImportValue(row, aliases);
+                const rawId = get(['ID Transaksi','ID','id','Transaction ID']);
+                const rawBookId = get(['Book ID','bookId','ID Buku']);
+                const rawBookTitle = get(['Buku','Judul Buku','Book','Book Title']);
+                const bookId = String(rawBookId ?? '').trim() || (() => {
+                    const title = String(rawBookTitle ?? '').trim().toLowerCase();
+                    if (!title) return '';
+                    const found = mockBooks.find(b => String(b.title || '').trim().toLowerCase() === title);
+                    return found ? found.id : '';
+                })();
+                const qty = Number(get(['Qty','Quantity','Jumlah'])) || 0;
+                const unitPrice = Number(get(['Harga Satuan','Unit Price','unitPrice','Harga'])) || 0;
+                const shippingCost = Number(get(['Ongkir','Ongkos Kirim','Shipping Cost','shippingCost'])) || 0;
+                const subtotalRaw = get(['Subtotal','Sub Total']);
+                const discountPercent = Number(get(['Diskon %','Discount Percent','discountPercent'])) || 0;
+                const discountAmount = Number(get(['Diskon','Discount','discountAmount'])) || 0;
+                const pointsUsed = Number(get(['Poin','Points Used','pointsUsed'])) || 0;
+                const pointsDiscount = Number(get(['Potongan Poin','Points Discount','pointsDiscount'])) || 0;
+                const totalRaw = get(['Total Bayar','Total Harga','Total','totalPrice']);
+                const subtotal = subtotalRaw === undefined || subtotalRaw === '' ? ((qty * unitPrice) + shippingCost) : Number(subtotalRaw) || 0;
+                const calculatedTotal = Math.max(0, subtotal - discountAmount - pointsDiscount);
+                const totalPrice = totalRaw === undefined || totalRaw === '' ? calculatedTotal : Number(totalRaw) || 0;
+                const status = String(get(['Status Transaksi','Status','status']) ?? '').trim();
+                const paymentStatus = String(get(['Status Pembayaran','Pembayaran','paymentStatus']) ?? '').trim();
+                const customerId = String(get(['Customer ID','customerId','ID Customer']) ?? '').trim().toUpperCase();
+                const customerName = String(get(['Customer','Nama Customer','Nama Pemesan','customerName']) ?? '').trim();
+                const customerPhone = String(get(['No HP','Nomor HP','Telepon','Phone','customerPhone']) ?? '').trim();
+                const customerEmail = String(get(['Email','customerEmail']) ?? '').trim();
+                const customerAddress = String(get(['Alamat','Address','customerAddress']) ?? '').trim();
+                const dpAmount = Number(get(['DP Amount','DP','dpAmount'])) || 0;
+                const shippingVendor = String(get(['Vendor Ekspedisi','Ekspedisi','shippingVendor']) ?? '').trim();
+                const trackingNumber = String(get(['Nomor Resi','Resi','trackingNumber']) ?? '').trim();
+                const date = this.parseImportedDate(get(['Tanggal','Tanggal Pemesanan','Date','date']));
+
+                let id = String(rawId ?? '').trim().toUpperCase();
+                const isPendingId = id.startsWith('ORD-PENDING-');
+                const isNewOrder = !id || isPendingId;
+                if (isNewOrder) id = `ORD-PENDING-IMPORT-${Date.now()}-${index}-${Math.random().toString(36).slice(2,8)}`;
+
+                if (!bookId) return { valid:false, reason:'Buku tidak ditemukan. Gunakan Book ID atau Judul Buku yang sama dengan Katalog Buku.', row };
+                if (!qty || qty < 0) return { valid:false, reason:'Qty tidak valid.', row };
+                if (!customerName) return { valid:false, reason:'Nama customer kosong.', row };
+
+                const existing = appData.orders.find(o => String(o.id).toUpperCase() === String(rawId ?? '').trim().toUpperCase());
+                const patch = {
+                    id,
+                    date: date || (existing?.date || todayISO()),
+                    customerId: customerId || existing?.customerId || '',
+                    customerName,
+                    customerPhone,
+                    customerEmail,
+                    customerAddress,
+                    bookId,
+                    qty,
+                    unitPrice,
+                    shippingCost,
+                    subtotal,
+                    discountPercent,
+                    discountAmount,
+                    pointsUsed,
+                    pointsDiscount,
+                    pointsEarned: Number(get(['Poin Diperoleh','Points Earned','pointsEarned'])) || existing?.pointsEarned || 0,
+                    totalPrice,
+                    status: status || existing?.status || ORDER_STATUS.NEW,
+                    paymentStatus: paymentStatus || existing?.paymentStatus || PAYMENT_STATUS.UNPAID,
+                    dpAmount,
+                    shippingVendor,
+                    trackingNumber,
+                    clientRequestId: String(get(['clientRequestId','Client Request ID']) ?? existing?.clientRequestId ?? this.makeImportRequestId(index)),
+                    isNewOrder,
+                    isNewCustomer: !customerId && !existing?.customerId
+                };
+
+                return { valid:true, order:patch, isExisting:!!existing && !isNewOrder, row };
+            },
+
+            openImportExcel() {
+                if (currentUser && currentUser.role === 'Viewer') {
+                    showToast('Viewer tidak memiliki hak untuk import data.', 'error');
+                    return;
+                }
+                if (!window.XLSX) {
+                    showToast('Library Excel belum siap. Periksa koneksi internet lalu coba lagi.', 'error');
+                    return;
+                }
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.xlsx,.xls,.csv';
+                input.style.display = 'none';
+                input.onchange = async (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    input.remove();
+                    if (file) await this.handleImportExcelFile(file);
+                };
+                document.body.appendChild(input);
+                input.click();
+            },
+
+            async handleImportExcelFile(file) {
+                try {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(buffer, { type:'array', cellDates:true, raw:true });
+                    const sheetName = workbook.SheetNames[0];
+                    if (!sheetName) throw new Error('Sheet Excel tidak ditemukan.');
+                    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval:'', raw:true });
+                    if (!rows.length) throw new Error('File Excel tidak memiliki data.');
+
+                    const parsed = rows.map((row, idx) => this.normalizeImportOrder(row, idx));
+                    const valid = parsed.filter(x => x.valid);
+                    const invalid = parsed.filter(x => !x.valid);
+                    const updates = valid.filter(x => x.isExisting);
+                    const additions = valid.filter(x => !x.isExisting);
+                    this._pendingImportOrders = valid.map(x => x.order);
+
+                    document.getElementById('modal-root').innerHTML = `
+                        <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center fade-in p-4">
+                            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                                <div class="p-5 border-b bg-gray-50 flex justify-between items-center">
+                                    <div><h3 class="font-bold text-lg text-gray-800">Import Data Pemesanan</h3><p class="text-xs text-gray-500 mt-1">${escapeHtml(file.name)}</p></div>
+                                    <button onclick="app.closeModal(); app._pendingImportOrders=[]" class="text-gray-500 hover:text-red-500"><i class="ph ph-x text-xl"></i></button>
+                                </div>
+                                <div class="p-6 space-y-4 overflow-y-auto max-h-[65vh]">
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div class="bg-blue-50 border border-blue-100 rounded-lg p-4"><p class="text-xs text-blue-600 font-semibold">Baris Valid</p><p class="text-2xl font-bold text-blue-800">${valid.length}</p></div>
+                                        <div class="bg-green-50 border border-green-100 rounded-lg p-4"><p class="text-xs text-green-600 font-semibold">Update Data Lama</p><p class="text-2xl font-bold text-green-800">${updates.length}</p></div>
+                                        <div class="bg-purple-50 border border-purple-100 rounded-lg p-4"><p class="text-xs text-purple-600 font-semibold">Data Baru</p><p class="text-2xl font-bold text-purple-800">${additions.length}</p></div>
+                                    </div>
+                                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+                                        <i class="ph ph-shield-check mr-1"></i>
+                                        Import bersifat <strong>upsert/merge</strong>: data yang tidak ada di Excel <strong>tidak dihapus</strong>. Untuk ID transaksi yang sama, hanya kolom yang tersedia di Excel yang diperbarui; kolom lain tetap dipertahankan.
+                                    </div>
+                                    ${invalid.length ? `<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700"><p class="font-bold mb-2">${invalid.length} baris dilewati:</p><ul class="list-disc ml-5 space-y-1 max-h-32 overflow-y-auto">${invalid.slice(0,20).map(x=>`<li>${escapeHtml(x.reason)}</li>`).join('')}</ul>${invalid.length>20?'<p class="mt-2 text-xs">Dan masih ada baris lain yang dilewati.</p>':''}</div>` : ''}
+                                    <div class="text-xs text-gray-500">Kunci update: <strong>ID Transaksi</strong>. Jika ID kosong, sistem membuat ID transaksi baru yang aman di server.</div>
+                                </div>
+                                <div class="p-4 border-t bg-gray-50 flex justify-end gap-2">
+                                    <button onclick="app.closeModal(); app._pendingImportOrders=[]" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-white">Batal</button>
+                                    <button onclick="app.confirmImportExcel()" ${valid.length ? '' : 'disabled'} class="px-5 py-2 bg-corp-primary text-white rounded-lg font-semibold hover:bg-blue-800 shadow disabled:opacity-50">Import ${valid.length} Data</button>
+                                </div>
+                            </div>
+                        </div>`;
+                } catch (error) {
+                    console.error('Import Excel gagal:', error);
+                    showToast('Import Excel gagal: ' + (error.message || 'Format file tidak valid.'), 'error');
+                }
+            },
+
+            async confirmImportExcel() {
+                const orders = Array.isArray(this._pendingImportOrders) ? this._pendingImportOrders.slice() : [];
+                if (!orders.length) return;
+                const btns = document.querySelectorAll('#modal-root button');
+                btns.forEach(b => b.disabled = true);
+                showToast(`Mengimport ${orders.length} data tanpa menghapus data lama...`, 'info');
+                try {
+                    const res = await apiService.sendAction('importOrders', { orders });
+                    if (!res || res.status !== 'success') throw new Error(res?.message || 'Server menolak import.');
+
+                    const returned = Array.isArray(res.orders) ? res.orders : [];
+                    const returnedById = new Map(returned.map(o => [String(o.id), o]));
+                    orders.forEach(localOrder => {
+                        const final = returnedById.get(String(localOrder.id)) || localOrder;
+                        const idx = appData.orders.findIndex(o => String(o.id) === String(localOrder.id));
+                        if (idx >= 0) appData.orders[idx] = { ...appData.orders[idx], ...final, isNewOrder:false, isNewCustomer:false };
+                        else appData.orders.unshift({ ...final, isNewOrder:false, isNewCustomer:false });
+                        delete pendingOrderSync[String(localOrder.id)];
+                        ensureOrderHistory(final);
+                    });
+                    saveOrderHistories();
+                    this.saveLocalStorage();
+                    this._pendingImportOrders = [];
+                    this.closeModal();
+                    showToast(`Import selesai: ${res.updated || 0} diperbarui, ${res.added || 0} data baru, ${res.skipped || 0} dilewati. Data lama di luar file tetap aman.`, 'success');
+                    await this.syncFromSpreadsheet();
+                } catch (error) {
+                    console.error('Konfirmasi import gagal:', error);
+                    showToast('Import gagal: ' + (error.message || 'Terjadi kesalahan.'), 'error');
+                    btns.forEach(b => b.disabled = false);
+                }
+            },
+
+            downloadImportTemplate() {
+                if (!window.XLSX) { showToast('Library Excel belum siap.', 'error'); return; }
+                const headers = ['ID Transaksi','Tanggal','Customer ID','Customer','No HP','Email','Alamat','Book ID','Buku','Qty','Harga Satuan','Ongkir','Subtotal','Diskon %','Diskon','Poin','Potongan Poin','Poin Diperoleh','Total Bayar','Status Transaksi','Status Pembayaran','DP Amount','Vendor Ekspedisi','Nomor Resi'];
+                const ws = XLSX.utils.aoa_to_sheet([headers]);
+                ws['!cols'] = headers.map((h,i)=>({wch:[18,12,16,26,16,28,32,12,36,8,14,14,14,10,14,10,14,14,16,18,18,14,20,18][i] || 15}));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Import Orders');
+                XLSX.writeFile(wb, `Template_Import_Pemesanan_YKBUT_${todayISO()}.xlsx`);
+                showToast('Template import berhasil diunduh.', 'success');
+            },
+
             exportToExcel() {
                 const orders = this.getFilteredOrders();
                 if (!orders.length) {
@@ -2023,7 +2355,7 @@
 
                 orders.forEach(order => {
                     const book = getBook(order.bookId);
-                    tableHtml += `<tr><td>${esc(order.id)}</td><td>${esc(order.date)}</td><td>${esc(order.customerId || '')}</td><td>${esc(order.customerName)}</td><td>${esc(order.customerPhone)}</td><td>${esc(order.customerEmail || '-')}</td><td>${esc(order.customerAddress)}</td><td>${esc(book ? book.title : '-')}</td><td>${Number(order.qty || 0)}</td><td>${Number(order.unitPrice || 0)}</td><td>${Number(order.shippingCost || 0)}</td><td>${Number(order.subtotal || ((Number(order.qty || 0) * Number(order.unitPrice || 0)) + Number(order.shippingCost || 0)))}</td><td>${Number(order.discountAmount || 0)}</td><td>${Number(order.pointsDiscount || 0)}</td><td>${Number(order.totalPrice || 0)}</td><td>${esc(order.status)}</td><td>${esc(order.paymentStatus)}</td><td>${esc(order.trackingNumber || '-')}</td></tr>`;
+                    tableHtml += `<tr><td>${esc(getOrderDisplayId(order))}</td><td>${esc(order.date)}</td><td>${esc(order.customerId || '')}</td><td>${esc(order.customerName)}</td><td>${esc(order.customerPhone)}</td><td>${esc(order.customerEmail || '-')}</td><td>${esc(order.customerAddress)}</td><td>${esc(book ? book.title : '-')}</td><td>${Number(order.qty || 0)}</td><td>${Number(order.unitPrice || 0)}</td><td>${Number(order.shippingCost || 0)}</td><td>${Number(order.subtotal || ((Number(order.qty || 0) * Number(order.unitPrice || 0)) + Number(order.shippingCost || 0)))}</td><td>${Number(order.discountAmount || 0)}</td><td>${Number(order.pointsDiscount || 0)}</td><td>${Number(order.totalPrice || 0)}</td><td>${esc(order.status)}</td><td>${esc(order.paymentStatus)}</td><td>${esc(order.trackingNumber || '-')}</td></tr>`;
                 });
                 tableHtml += `</table>`;
 
@@ -2257,7 +2589,7 @@
                                 <button onclick="app.closeModal()" class="text-gray-500 hover:text-red-500 transition"><i class="ph ph-x text-xl"></i></button>
                             </div>
                             <div class="p-6 space-y-3">
-                                <p class="text-sm text-gray-700">Apakah Anda yakin ingin menghapus pesanan <strong>${order.id}</strong> atas nama <strong>${order.customerName}</strong>?</p>
+                                <p class="text-sm text-gray-700">Apakah Anda yakin ingin menghapus pesanan <strong>${getOrderDisplayId(order)}</strong> atas nama <strong>${order.customerName}</strong>?</p>
                                 <p class="text-xs text-red-500 italic">* Tindakan ini juga akan menghapus data tersebut dari Google Sheets secara permanen.</p>
                             </div>
                             <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
@@ -2305,7 +2637,7 @@
                                 <button onclick="app.closeModal()" class="text-gray-500 hover:text-red-500 transition"><i class="ph ph-x text-xl"></i></button>
                             </div>
                             <div class="p-6 space-y-4">
-                                <p class="text-sm text-gray-500 mb-2">ID Transaksi: <span class="font-bold text-gray-800">${order.id}</span> | Pemesan: <span class="font-bold text-gray-800">${order.customerName}</span></p>
+                                <p class="text-sm text-gray-500 mb-2">ID Transaksi: <span class="font-bold text-gray-800">${getOrderDisplayId(order)}</span> | Pemesan: <span class="font-bold text-gray-800">${order.customerName}</span></p>
 
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-1">Tanggal Pemesanan</label>
@@ -2686,6 +3018,7 @@
 
                     const newOrder = {
                         id: `ORD-PENDING-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+                        pendingDisplayNo: (() => { assignPendingDisplayIds(); const nums = appData.orders.map(o => Number(o.pendingDisplayNo)).filter(n => Number.isFinite(n) && n > 0); const permanent = appData.orders.map(o => { const m = /^ORD-(\d+)$/.exec(String(o.id || '')); return m ? Number(m[1]) : 0; }).filter(n => n > 0); return Math.max(0, ...nums, ...permanent) + 1; })(),
                         clientRequestId: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `REQ-${Date.now()}-${Math.random().toString(36).slice(2)}`,
                         isNewOrder: true,
                         date: document.getElementById('order-date').value || todayISO(),
@@ -2786,7 +3119,7 @@
                     .replace(/[\\/:*?"<>|]/g, '-')
                     .replace(/\s+/g, ' ')
                     .trim();
-                const printDocumentTitle = `${sanitizePrintTitle(order.id)} - ${sanitizePrintTitle(order.customerName)}`;
+                const printDocumentTitle = `${sanitizePrintTitle(getOrderDisplayId(order))} - ${sanitizePrintTitle(order.customerName)}`;
                 document.title = printDocumentTitle || 'YKBUT Press';
 
                 const book = getBook(order.bookId);
@@ -2844,7 +3177,7 @@
                         </div>
 
                         <div class="receipt-label" style="margin-bottom:9px;">
-                            <div class="receipt-row"><span>No:</span><span>${safe(order.id)}</span></div>
+                            <div class="receipt-row"><span>No:</span><span>${safe(getOrderDisplayId(order))}</span></div>
                             <div class="receipt-row"><span>Tgl Cetak:</span><span>${safe(printDate)}</span></div>
                             <div style="margin-top:5px;">
                                 <div style="font-weight:700;">Pemesan:</div>
@@ -2878,7 +3211,7 @@
                         <div class="receipt-small" style="margin-top:10px; padding-top:7px; border-top:1px dashed #000; text-align:center;">
                             <div>Terima Kasih</div>
                             <div>Telah Memesan di YKBUT Press</div>
-                            <div style="margin-top:3px;">${safe(order.id)}</div>
+                            <div style="margin-top:3px;">${safe(getOrderDisplayId(order))}</div>
                         </div>
                     </div>
                 `;
@@ -3494,7 +3827,7 @@
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
                 const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
-// Versi: Orders + Diskon + Loyalty Poin + Customer ID unik atomik + Settings + fallback saveOrder
+// Versi: Orders + Diskon + Loyalty Poin + Customer ID unik atomik + Settings + integrity snapshot + Excel Import Merge
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -3518,7 +3851,16 @@ function handleRequest(e) {
       result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings') };
     } else if (action === 'getAllData') {
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
-      result = { status:'success', orders:getSheetData(ss,'Orders'), books:getSheetData(ss,'Books'), users:getSheetData(ss,'Users'), settings:getSettings(ss) };
+      var ordersSnapshot = getSheetData(ss,'Orders');
+      result = {
+        status:'success',
+        orders:ordersSnapshot,
+        ordersCount:ordersSnapshot.length,
+        ordersSnapshotComplete:true,
+        books:getSheetData(ss,'Books'),
+        users:getSheetData(ss,'Users'),
+        settings:getSettings(ss)
+      };
     } else if (action === 'setupOrders') {
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       result = { status:'success', message:'Struktur Orders dan Settings berhasil diperbarui.' };
@@ -3555,6 +3897,11 @@ function handleRequest(e) {
         SpreadsheetApp.flush();
         result = { status:'success', id:postData.id, date:postData.date || '', customerId:postData.customerId };
       }
+    } else if (action === 'importOrders') {
+      ensureOrdersSchema(ss);
+      var incoming = postData && Array.isArray(postData.orders) ? postData.orders : [];
+      var importResult = importOrdersMerge(ss.getSheetByName('Orders'), incoming);
+      result = importResult;
     } else if (action === 'deleteOrder') {
       deleteRowById(ss,'Orders',postData.id); result = {status:'success'};
     } else if (action === 'saveBook') {
@@ -3572,6 +3919,66 @@ function handleRequest(e) {
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({status:'error',message:err.toString()})).setMimeType(ContentService.MimeType.JSON);
   } finally { lock.releaseLock(); }
+}
+
+function importOrdersMerge(sheet, incoming) {
+  var updated = 0, added = 0, skipped = 0, errors = [], savedOrders = [];
+  if (!sheet) throw new Error('Sheet Orders tidak ditemukan.');
+  incoming.forEach(function(item, idx) {
+    try {
+      if (!item || typeof item !== 'object') { skipped++; return; }
+      var order = {};
+      Object.keys(item).forEach(function(k){
+        if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') order[k] = item[k];
+      });
+      var requestId = String(order.clientRequestId || '').trim();
+      var existingByRequest = requestId ? findOrderByClientRequestId(sheet, requestId) : null;
+      if (existingByRequest) {
+        order.id = existingByRequest.id;
+      }
+      var rawId = String(order.id || '').trim();
+      if (!rawId || /^ORD-PENDING-/i.test(rawId)) {
+        order.id = reserveNextOrderId(sheet);
+        order.isNewOrder = false;
+      }
+      order.id = String(order.id).trim().toUpperCase();
+      if (!order.date) order.date = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      if (!order.customerId) order.customerId = reserveNextCustomerId(sheet);
+      order.customerId = String(order.customerId).trim().toUpperCase();
+      if (!order.clientRequestId) order.clientRequestId = 'IMPORT-' + new Date().getTime() + '-' + idx + '-' + Math.random().toString(36).slice(2,8);
+      validateCustomerIdConsistency(sheet, order);
+      var existed = orderIdExists(sheet, order.id);
+      upsertRowDynamic(sheet, 'id', order.id, order);
+      SpreadsheetApp.flush();
+      var saved = getOrderById(sheet, order.id);
+      savedOrders.push(saved || order);
+      if (existed) updated++; else added++;
+    } catch (err) {
+      skipped++;
+      errors.push('Baris ' + (idx + 2) + ': ' + err.toString());
+    }
+  });
+  return { status:'success', updated:updated, added:added, skipped:skipped, errors:errors, orders:savedOrders };
+}
+
+function getOrderById(sheet, id) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return null;
+  var headers = data[0].map(function(h){return String(h).trim();});
+  var idx = headers.indexOf('id');
+  if (idx === -1) return null;
+  for (var r=1;r<data.length;r++) {
+    if (String(data[r][idx]) === String(id)) {
+      var obj={};
+      headers.forEach(function(h,c){
+        var v=data[r][c];
+        if(v instanceof Date) v=Utilities.formatDate(v, SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+        obj[h]=v;
+      });
+      return obj;
+    }
+  }
+  return null;
 }
 
 function findOrderByClientRequestId(sheet, requestId) {
