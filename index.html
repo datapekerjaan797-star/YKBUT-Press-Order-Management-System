@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System V19</title>
+    <title>YKBUT Press Order Management System V20</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -685,7 +685,7 @@
             return storedUrl;
         }
 
-        const SYNC_ENGINE_VERSION = 'V19_SERVER_AUTHORITATIVE_UNIQUE_ID_SHIPPING';
+        const SYNC_ENGINE_VERSION = 'V20_SERVER_AUTHORITATIVE_NO_STALE_TOMBSTONES';
         const SERVER_EXPECTED_VERSION = 'YKBUT-PRESS-SERVER-V11';
         const FINGERPRINT_EXCLUDED_KEYS = new Set(['isNewOrder','isNewCustomer','pendingDisplayNo','localChangedAt']);
 
@@ -1077,15 +1077,19 @@
                     if (savedLastSyncMeta) {
                         try { lastSyncMeta = JSON.parse(savedLastSyncMeta) || null; } catch(e) { lastSyncMeta = null; }
                     }
-                    // V18 migration: baseline ID lama tidak lagi dipakai untuk menentukan
-                    // apakah snapshot server boleh diterima. Kita tetap menyimpan data lokal
-                    // sebagai fallback offline, tetapi membuang baseline lama agar tidak dapat
-                    // memblokir snapshot server yang valid.
+                    // V20 migration: LocalStorage lama dari V16/V17/V18/V19 tidak boleh
+                    // menyembunyikan order yang sebenarnya masih ada di Google Sheets.
+                    // Terutama `ykbut_deleted_order_ids` dapat berisi tombstone stale dari
+                    // perangkat lama dan menyebabkan ORD-001/ORD-002 hilang dari tabel walau
+                    // order tersebut masih ada di server. Karena Google Sheets adalah source of
+                    // truth, baseline lama dan seluruh tombstone lokal dibersihkan saat migrasi.
                     if (savedSyncEngineVersion !== SYNC_ENGINE_VERSION) {
                         knownServerOrderIds = new Set();
+                        deletedOrderIds = new Set();
                         lastServerOrderCount = null;
                         localStorage.setItem('ykbut_sync_engine_version', SYNC_ENGINE_VERSION);
                         localStorage.removeItem('ykbut_last_sync_meta');
+                        localStorage.removeItem('ykbut_deleted_order_ids');
                         lastSyncMeta = null;
                     } else {
                         lastServerOrderCount = knownServerOrderIds.size || null;
@@ -1113,7 +1117,10 @@
             },
 
             queueOrderForSync(order) {
-                if (!order || !order.id || deletedOrderIds.has(String(order.id))) return;
+                // V20: tidak lagi menggunakan tombstone deletedOrderIds sebagai guard.
+                // Server adalah sumber kebenaran; order yang valid di server tidak boleh
+                // diblokir hanya karena browser pernah menyimpan status deleted.
+                if (!order || !order.id) return;
                 const queued = {
                     ...order,
                     clientRequestId: order.clientRequestId || ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `REQ-${Date.now()}-${Math.random().toString(36).slice(2)}`),
@@ -1327,15 +1334,19 @@
                 }
 
                 // === SERVER AUTHORITATIVE ===
-                // Hapus seluruh order lokal yang sudah tidak ada di server, kecuali order
-                // yang benar-benar masih ada di pending queue. Tidak ada lagi safe-merge
-                // terhadap snapshot lokal lama.
+                // V20: jangan pernah memfilter snapshot server dengan deletedOrderIds.
+                // Tombstone lokal adalah artefak browser lama dan dapat menyembunyikan order
+                // yang masih benar-benar ada di Google Sheets. Google Sheets selalu menang.
+                // Setelah snapshot authoritative diterima, seluruh tombstone lokal dibuang.
+                deletedOrderIds = new Set();
+                localStorage.removeItem('ykbut_deleted_order_ids');
+
                 const mergedOrders = [];
                 const seen = new Set();
 
                 for (const serverOrder of serverOrders) {
                     const id = String(serverOrder.id || '').trim();
-                    if (!id || deletedOrderIds.has(id)) continue;
+                    if (!id) continue;
                     const pending = pendingOrderSync[id];
                     const local = localOrdersById.get(id);
                     const chosen = pending ? { ...pending } : { ...serverOrder };
@@ -1348,7 +1359,7 @@
                 // snapshot server. LocalStorage lama yang tidak ada di server tidak pernah
                 // dihidupkan kembali.
                 Object.keys(pendingOrderSync || {}).forEach(id => {
-                    if (deletedOrderIds.has(String(id)) || seen.has(String(id))) return;
+                    if (seen.has(String(id))) return;
                     if (pendingOrderSync[id]) {
                         mergedOrders.push({ ...pendingOrderSync[id] });
                         seen.add(String(id));
@@ -1592,7 +1603,7 @@
                 const merged = base.map(o => ({ ...o }));
                 const seen = new Set(merged.map(o => String(o.id)));
                 Object.keys(pendingOrderSync || {}).forEach(id => {
-                    if (deletedOrderIds.has(String(id)) || seen.has(String(id))) return;
+                    if (seen.has(String(id))) return;
                     const pending = pendingOrderSync[id];
                     if (pending) { merged.push({ ...pending }); seen.add(String(id)); }
                 });
@@ -2695,21 +2706,23 @@
                 if (currentUser && currentUser.role === 'Viewer') return;
                 appData.orders = appData.orders.filter(o => o.id !== orderId);
                 delete pendingOrderSync[String(orderId)];
-                deletedOrderIds.add(String(orderId));
+                // V20: tidak lagi membuat tombstone permanen di LocalStorage. Setelah server
+                // berhasil menghapus, order tidak akan kembali karena snapshot server menjadi
+                // authoritative. Jika server gagal, sync ulang akan mengembalikan data server.
+                deletedOrderIds.delete(String(orderId));
                 this.saveLocalStorage();
                 this.closeModal();
                 this.renderOrders(document.getElementById('app-content'));
-                
+
                 showToast(`Menghapus pesanan ${orderId} dari Google Sheets...`, 'info');
                 const res = await apiService.sendAction('deleteOrder', { id: orderId });
                 if (res && res.status === 'success') {
-                    // Tombstone sengaja dipertahankan agar order yang sudah dihapus tidak
-                    // muncul kembali saat merge/sync berikutnya. ID transaksi baru tidak
-                    // pernah dipakai ulang karena server membuat ID secara atomik.
                     this.saveLocalStorage();
                     showToast(`Pesanan ${orderId} berhasil dihapus!`, 'success');
+                    await this.syncFromSpreadsheet();
                 } else {
-                    showToast(`Pesanan ${orderId} dihapus dari tampilan, tetapi penghapusan server belum berhasil.`, 'info');
+                    showToast(`Penghapusan server belum berhasil. Data server akan dipulihkan.`, 'info');
+                    await this.syncFromSpreadsheet();
                 }
             },
 
