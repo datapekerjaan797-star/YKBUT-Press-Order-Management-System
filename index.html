@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System V20</title>
+    <title>YKBUT Press Order Management System V21</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1939,9 +1939,24 @@
 
                 const filteredOrders = this.getFilteredOrders();
 
+                // V21: angka utama pada kolom "TOTAL HARGA" Data Pemesanan
+                // harus bersumber dari kolom `subtotal` (kolom R) di Google Sheets.
+                // Fallback hanya dipakai untuk record lama yang belum memiliki nilai subtotal.
+                const getOrderTableAmount = (order) => {
+                    const rawSubtotal = order?.subtotal;
+                    if (rawSubtotal !== undefined && rawSubtotal !== null && String(rawSubtotal).trim() !== '' && Number.isFinite(Number(rawSubtotal))) {
+                        return Number(rawSubtotal);
+                    }
+                    const qty = Math.max(0, Number(order?.qty || 0));
+                    const unitPrice = Math.max(0, Number(order?.unitPrice || 0));
+                    const shipping = Math.max(0, Number(order?.shippingCost || 0));
+                    return (qty * unitPrice) + shipping;
+                };
+
                 let tableRows = filteredOrders.map((order) => {
                     const book = getBook(order.bookId);
                     const bookTitle = book ? book.title : '<span class="text-red-500">Buku tidak ditemukan</span>';
+                    const tableAmount = getOrderTableAmount(order);
                     return `
                     <tr class="border-b hover:bg-gray-50 transition-colors">
                         <td class="py-3 px-4 text-sm font-medium text-gray-800">${getOrderDisplayId(order)}</td>
@@ -1955,7 +1970,7 @@
                         </td>
                         <td class="py-3 px-4 text-sm text-gray-600 max-w-xs truncate" title="${bookTitle}">${bookTitle} <br><span class="text-xs font-bold text-gray-400">Qty: ${order.qty}</span></td>
                         <td class="py-3 px-4 text-sm font-semibold text-gray-800">
-                            ${formatRupiah(order.totalPrice)}
+                            ${formatRupiah(tableAmount)}
                             ${order.shippingCost > 0 ? `<br><span class="text-[10px] text-gray-400 font-normal">+ Ongkir ${formatRupiah(order.shippingCost)}</span>` : ''}
                         </td>
                         <td class="py-3 px-4">
