@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System</title>
+    <title>YKBUT Press Order Management System V18.1</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -545,7 +545,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -580,7 +580,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -640,7 +640,7 @@
                 <button onclick="app.openSheetConfigModal()" class="px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-corp-primary rounded-lg flex items-center transition border border-blue-200">
                     <i class="ph ph-wrench text-base mr-1.5"></i> Setup &amp; Diagnosa Sheets
                 </button>
-                <button onclick="app.syncFromSpreadsheet()" title="Sinkronkan ulang dengan Google Spreadsheet" class="px-3 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition border border-gray-300">
+                <button onclick="app.syncFromSpreadsheet()" title="Reload & sinkronkan ulang dari snapshot Google Sheets terbaru" class="px-3 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center transition border border-gray-300">
                     <i class="ph ph-arrows-clockwise text-sm mr-1.5" id="sync-icon"></i> Reload Data
                 </button>
                 <span class="text-sm text-gray-500 flex items-center border-l pl-3 ml-1">
@@ -661,18 +661,57 @@
     <script>
         const SPREADSHEET_CONFIG = {
             TARGET_SHEET_ID: "115m5DYcwSiH6cEOkIBWgdsBG_59a6SPHyWj4V0EZqp8",
-            DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwgtF-7VKmf9NYemPsxZ7C24BWi2TEUmIXdSnB0cioMjWf9YXuMk9yUmTeI1fVlaJq9/exec"
+            DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwzG-MzCnvZhzYZdO2sPCFGwu10uDLRQNHSXMaOwJTf79utt70zlZQ-8TO8HHn25b1I/exec"
         };
 
-        function getWebAppUrl() {
-            // Deployment aktif YKBUT Press. URL ini diprioritaskan agar aplikasi
-            // tidak kembali menggunakan URL deployment lama yang tersimpan di browser.
-            const activeUrl = SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL;
-            if (localStorage.getItem('ykbut_webapp_url') !== activeUrl) {
-                localStorage.setItem('ykbut_webapp_url', activeUrl);
-            }
-            return activeUrl;
+        function isValidWebAppUrl(url) {
+            return /^https:\/\/script\.google\.com\/macros\/s\/[^\s/]+\/exec(?:\?.*)?$/i.test(String(url || '').trim());
         }
+
+        function getWebAppUrl() {
+            // V18.1 FINAL: gunakan deployment terbaru sebagai default dan migrasikan
+            // URL deployment lama yang pernah tersimpan di browser. URL yang tersimpan
+            // secara manual tetap dipertahankan selama bukan salah satu URL legacy.
+            const storedUrl = String(localStorage.getItem('ykbut_webapp_url') || '').trim();
+            const legacyUrls = new Set([
+                'https://script.google.com/macros/s/AKfycbwgtF-7VKmf9NYemPsxZ7C24BWi2TEUmIXdSnB0cioMjWf9YXuMk9yUmTeI1fVlaJq9/exec'
+            ]);
+
+            if (!storedUrl || legacyUrls.has(storedUrl) || !isValidWebAppUrl(storedUrl)) {
+                localStorage.setItem('ykbut_webapp_url', SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL);
+                return SPREADSHEET_CONFIG.DEFAULT_WEB_APP_URL;
+            }
+
+            return storedUrl;
+        }
+
+        const SYNC_ENGINE_VERSION = 'V18.1_SERVER_AUTHORITATIVE_URLFIX';
+        const SERVER_EXPECTED_VERSION = 'YKBUT-PRESS-SERVER-V10';
+        const FINGERPRINT_EXCLUDED_KEYS = new Set(['isNewOrder','isNewCustomer','pendingDisplayNo','localChangedAt']);
+
+        const canonicalizeOrderForFingerprint = (order) => {
+            const out = {};
+            Object.keys(order || {}).sort().forEach(key => {
+                if (FINGERPRINT_EXCLUDED_KEYS.has(key)) return;
+                let value = order[key];
+                if (value === null || value === undefined) value = '';
+                out[key] = String(value);
+            });
+            return out;
+        };
+
+        const computeOrdersFingerprint = (orders) => {
+            const canonical = (Array.isArray(orders) ? orders : [])
+                .map(canonicalizeOrderForFingerprint)
+                .sort((a, b) => String(a.id || '').localeCompare(String(b.id || '')));
+            const payload = canonical.map(item => JSON.stringify(item)).join('\u001e');
+            let hash = 2166136261 >>> 0;
+            for (let i = 0; i < payload.length; i++) {
+                hash ^= payload.charCodeAt(i);
+                hash = (hash * 16777619) >>> 0;
+            }
+            return ('00000000' + hash.toString(16)).slice(-8);
+        };
 
         let mockUsers = [
             { id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' },
@@ -774,6 +813,7 @@
         let knownServerOrderIds = new Set();
         let lastServerOrderCount = null;
         let syncInProgress = false;
+        let lastSyncMeta = null;
 
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number || 0);
         const formatDateID = (dateValue) => {
@@ -1003,7 +1043,24 @@
                     if (savedPending) pendingOrderSync = JSON.parse(savedPending) || {};
                     if (savedDeleted) deletedOrderIds = new Set(JSON.parse(savedDeleted) || []);
                     if (savedKnownServerIds) knownServerOrderIds = new Set(JSON.parse(savedKnownServerIds) || []);
-                    lastServerOrderCount = knownServerOrderIds.size || null;
+                    const savedSyncEngineVersion = localStorage.getItem('ykbut_sync_engine_version');
+                    const savedLastSyncMeta = localStorage.getItem('ykbut_last_sync_meta');
+                    if (savedLastSyncMeta) {
+                        try { lastSyncMeta = JSON.parse(savedLastSyncMeta) || null; } catch(e) { lastSyncMeta = null; }
+                    }
+                    // V18 migration: baseline ID lama tidak lagi dipakai untuk menentukan
+                    // apakah snapshot server boleh diterima. Kita tetap menyimpan data lokal
+                    // sebagai fallback offline, tetapi membuang baseline lama agar tidak dapat
+                    // memblokir snapshot server yang valid.
+                    if (savedSyncEngineVersion !== SYNC_ENGINE_VERSION) {
+                        knownServerOrderIds = new Set();
+                        lastServerOrderCount = null;
+                        localStorage.setItem('ykbut_sync_engine_version', SYNC_ENGINE_VERSION);
+                        localStorage.removeItem('ykbut_last_sync_meta');
+                        lastSyncMeta = null;
+                    } else {
+                        lastServerOrderCount = knownServerOrderIds.size || null;
+                    }
                     loadReceiptHeader();
                     loadOrderHistories();
                 } catch(e) {
@@ -1021,12 +1078,19 @@
                     localStorage.setItem('ykbut_pending_order_sync', JSON.stringify(pendingOrderSync || {}));
                     localStorage.setItem('ykbut_deleted_order_ids', JSON.stringify(Array.from(deletedOrderIds || [])));
                     localStorage.setItem('ykbut_known_server_order_ids', JSON.stringify(Array.from(knownServerOrderIds || [])));
+                    localStorage.setItem('ykbut_sync_engine_version', SYNC_ENGINE_VERSION);
+                    if (lastSyncMeta) localStorage.setItem('ykbut_last_sync_meta', JSON.stringify(lastSyncMeta));
                 } catch(e) { console.error('LocalStorage save error', e); }
             },
 
             queueOrderForSync(order) {
                 if (!order || !order.id || deletedOrderIds.has(String(order.id))) return;
-                pendingOrderSync[String(order.id)] = { ...order };
+                const queued = {
+                    ...order,
+                    clientRequestId: order.clientRequestId || ((window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `REQ-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+                    localChangedAt: Date.now()
+                };
+                pendingOrderSync[String(order.id)] = queued;
                 this.saveLocalStorage();
             },
 
@@ -1088,234 +1152,215 @@
                 const badge = document.getElementById('sync-status-badge');
                 const syncIcon = document.getElementById('sync-icon');
 
-                if(syncIcon) syncIcon.classList.add('animate-spin');
-                if(badgeText) badgeText.innerText = "Mengecek Koneksi...";
+                const setBadge = (kind, text, title='') => {
+                    if (!badge || !badgeText || !badgeDot) return;
+                    const styles = {
+                        checking: ['bg-blue-50 text-blue-700 border-blue-200', 'bg-blue-500', true],
+                        success: ['bg-green-50 text-green-700 border-green-200 hover:bg-green-100', 'bg-green-500', false],
+                        warning: ['bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100', 'bg-amber-500', false],
+                        error: ['bg-red-50 text-red-700 border-red-200 hover:bg-red-100', 'bg-red-500', false]
+                    };
+                    const cfg = styles[kind] || styles.warning;
+                    badge.className = `flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold ${cfg[0]} transition`;
+                    badgeDot.className = `w-2 h-2 rounded-full ${cfg[1]}${cfg[2] ? ' animate-ping' : ''}`;
+                    badgeText.innerText = text;
+                    if (title) badge.title = title;
+                };
 
-                // Snapshot lokal diambil SEBELUM request. Ini penting: transaksi yang
-                // baru dibuat tetapi belum sempat sampai server tidak boleh dihapus hanya
-                // karena response server datang lebih cepat/lambat.
+                if(syncIcon) syncIcon.classList.add('animate-spin');
+                setBadge('checking', 'Mengecek Koneksi...', 'Mengambil snapshot terbaru dari Google Sheets.');
+
+                // Local data hanya dipakai sebagai fallback/offline cache dan untuk
+                // mempertahankan transaksi yang benar-benar masih berada di pending queue.
                 const localOrdersSnapshot = Array.isArray(appData.orders) ? appData.orders.map(o => ({ ...o })) : [];
                 const localOrdersById = new Map(localOrdersSnapshot.map(o => [String(o.id), o]));
                 const serverData = await apiService.fetchAll();
 
                 if(syncIcon) syncIcon.classList.remove('animate-spin');
 
-                if (serverData && serverData.status === 'success') {
-                    const rawServerOrders = Array.isArray(serverData.orders) ? serverData.orders : [];
-                    // Kompatibilitas dengan struktur Orders lama tetap dipertahankan.
-                    const serverOrders = rawServerOrders.map(o => {
-                        const validOrderStatuses = Object.values(ORDER_STATUS);
-                        if (validOrderStatuses.includes(o.paymentStatus) && !isNaN(o.status) && o.status !== '') {
-                            const vals = Object.values(o);
-                            return {
-                                id: o.id,
-                                date: o.date,
-                                customerName: o.customerName,
-                                customerPhone: o.customerPhone,
-                                customerEmail: o.customerEmail,
-                                customerAddress: o.customerAddress,
-                                bookId: o.bookId,
-                                qty: o.qty,
-                                unitPrice: o.unitPrice,
-                                shippingCost: parseFloat(o.totalPrice) || 0,
-                                totalPrice: parseFloat(o.status) || 0,
-                                status: o.paymentStatus,
-                                paymentStatus: o.dpAmount,
-                                dpAmount: parseFloat(o.shippingVendor) || 0,
-                                shippingVendor: o.trackingNumber,
-                                trackingNumber: vals.length >= 15 ? vals[vals.length - 1] : ''
-                            };
-                        }
-                        return { ...o };
-                    });
-                    const serverOrdersById = new Map(serverOrders.map(o => [String(o.id), o]));
-
-                    // GUARD DATA INTEGRITY: jangan pernah menerima snapshot server yang
-                    // tiba-tiba kehilangan order yang sebelumnya sudah diketahui. Ini melindungi
-                    // aplikasi dari response parsial, timeout/proxy aneh, deployment yang salah,
-                    // atau race condition saat Sheets sedang berubah. Penurunan jumlah hanya boleh
-                    // terjadi untuk ID yang memang sengaja dihapus melalui aplikasi.
-                    const incomingServerIds = new Set(serverOrders.map(o => String(o.id || '').trim()).filter(Boolean));
-                    const duplicateIds = serverOrders.length !== incomingServerIds.size;
-                    // Pada migrasi pertama V13, V12 belum menyimpan baseline server. Gunakan
-                    // ID order lokal yang bukan pending sebagai baseline tambahan. Ini mencegah
-                    // V13 menerima response server yang tiba-tiba hanya berisi sebagian data.
-                    const baselineIds = new Set(knownServerOrderIds);
-                    if (baselineIds.size === 0 && localOrdersSnapshot.length > 0) {
-                        localOrdersSnapshot.forEach(o => {
-                            const id = String(o.id || '').trim();
-                            if (id && !pendingOrderSync[id] && !deletedOrderIds.has(id)) baselineIds.add(id);
-                        });
-                    }
-                    const unexpectedMissing = Array.from(baselineIds).filter(id => !incomingServerIds.has(id) && !deletedOrderIds.has(id));
-
-                    // V15: validasi kelengkapan harus mengacu pada metadata snapshot dari server,
-                    // bukan daftar ID lama di localStorage. Daftar knownServerOrderIds dapat menjadi
-                    // stale setelah migrasi versi aplikasi, penghapusan manual di Sheets, atau
-                    // pergantian deployment. Selama Apps Script menyatakan snapshot lengkap dan
-                    // jumlah row yang dikirim sama dengan jumlah Orders di server, snapshot dianggap
-                    // authoritative dan baseline lama direfresh. Ini menghilangkan false-positive
-                    // "Sync ditahan" seperti kasus 2 ID lama yang tidak lagi ada di response.
-                    const serverReportsComplete = serverData.ordersSnapshotComplete === true;
-                    const serverReportedCount = Number(serverData.ordersCount);
-                    const serverCountMatches = Number.isFinite(serverReportedCount) && serverReportedCount === serverOrders.length;
-                    const structurallyValidSnapshot = !duplicateIds && serverReportsComplete && serverCountMatches;
-                    const serverSnapshotSuspicious = !structurallyValidSnapshot && (duplicateIds || (baselineIds.size > 0 && unexpectedMissing.length > 0));
-
-                    if (serverSnapshotSuspicious) {
-                        // IMPORTANT: jangan berhenti dengan dataset kosong hanya karena response
-                        // server parsial. Versi sebelumnya melakukan return di sini, sehingga ketika
-                        // localStorage tidak memiliki snapshot order yang lengkap, Dashboard dapat
-                        // jatuh menjadi 0 walaupun response server sebenarnya masih berisi banyak order.
-                        // Sekarang kita membuat SAFE MERGE: semua order yang datang dari server tetap
-                        // ditampilkan, sementara order yang sebelumnya sudah diketahui tetapi hilang
-                        // dari response tetap dipertahankan dari snapshot lokal/confirmed sebelumnya.
-                        const priorOrders = Array.isArray(confirmedServerOrders) && confirmedServerOrders.length
-                            ? confirmedServerOrders
-                            : localOrdersSnapshot;
-                        const safeMap = new Map();
-                        priorOrders.forEach(o => {
-                            const id = String(o?.id || '').trim();
-                            if (id && !deletedOrderIds.has(id)) safeMap.set(id, { ...o });
-                        });
-                        serverOrders.forEach(o => {
-                            const id = String(o?.id || '').trim();
-                            if (id && !deletedOrderIds.has(id)) safeMap.set(id, { ...o });
-                        });
-                        Object.keys(pendingOrderSync || {}).forEach(id => {
-                            if (deletedOrderIds.has(String(id))) return;
-                            const pending = pendingOrderSync[id];
-                            if (pending) safeMap.set(String(id), { ...pending });
-                        });
-
-                        confirmedServerOrders = Array.from(safeMap.values());
-                        knownServerOrderIds = new Set(confirmedServerOrders.map(o => String(o.id)).filter(Boolean));
-                        lastServerOrderCount = serverOrders.length;
-                        this.saveLocalStorage();
-
-                        if(badge) {
-                            badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200";
-                            if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-amber-500";
-                            if(badgeText) badgeText.innerText = "Sync ditahan • Data server perlu dicek";
-                        }
-                        console.error('SYNC DITAHAN: snapshot Orders tidak konsisten. Safe merge dipakai.', {
-                            previousCount: baselineIds.size,
-                            incomingCount: serverOrders.length,
-                            safeCount: confirmedServerOrders.length,
-                            unexpectedMissing,
-                            duplicateIds
-                        });
-                        showToast(`Response server tidak lengkap (${unexpectedMissing.length || 'ada'} data tidak ditemukan). Data yang sudah ada dipertahankan.`, 'error');
-                        syncInProgress = false;
-                        this.navigate(this.currentView);
-                        return;
-                    }
-
-                    // Snapshot authoritative dari Google Sheets untuk perhitungan Dashboard.
-                    confirmedServerOrders = serverOrders.map(o => ({ ...o }));
-                    // Snapshot server yang tervalidasi menjadi baseline baru. Jangan menggabungkan
-                    // ID lama dari localStorage karena ID yang sudah dihapus/diubah di server dapat
-                    // membuat guard kembali memunculkan false-positive pada sync berikutnya.
-                    knownServerOrderIds = new Set(incomingServerIds);
-                    lastServerOrderCount = serverOrders.length;
+                if (!(serverData && serverData.status === 'success')) {
+                    lastSyncMeta = {
+                        engineVersion: SYNC_ENGINE_VERSION,
+                        status: 'offline',
+                        at: new Date().toISOString(),
+                        message: serverData?.message || 'Server tidak dapat diakses'
+                    };
                     this.saveLocalStorage();
-                    const mergedOrders = [];
-                    const seen = new Set();
-
-                    // Server tetap menjadi sumber utama untuk data yang sudah tersimpan.
-                    // Namun pending/local-only order selalu dipertahankan sampai server
-                    // benar-benar mengonfirmasi penyimpanannya.
-                    for (const serverOrder of serverOrders) {
-                        const id = String(serverOrder.id);
-                        if (deletedOrderIds.has(id)) continue;
-                        const pending = pendingOrderSync[id];
-                        const local = localOrdersById.get(id);
-                        const chosen = pending ? { ...pending } : { ...serverOrder };
-                        if (!chosen.date && local?.date) chosen.date = local.date;
-                        mergedOrders.push(chosen);
-                        seen.add(id);
-                    }
-
-                    // PERBAIKAN V11: hanya transaksi yang memang sudah masuk pending queue
-                    // yang boleh dipertahankan sebagai local-only. Transaksi lama yang sekadar
-                    // masih tertinggal di localStorage tetapi tidak pernah tercatat sebagai pending
-                    // tidak boleh dihidupkan kembali karena dapat membuat Dashboard lebih besar
-                    // daripada data Orders di Google Sheets.
-                    for (const localOrder of localOrdersSnapshot) {
-                        const id = String(localOrder.id);
-                        if (deletedOrderIds.has(id) || seen.has(id)) continue;
-                        if (pendingOrderSync[id]) {
-                            mergedOrders.push({ ...pendingOrderSync[id] });
-                            seen.add(id);
-                        }
-                    }
-
-                    // Pending order yang memang tercatat sebagai antrean tetap dipulihkan.
-                    Object.keys(pendingOrderSync).forEach(id => {
-                        if (deletedOrderIds.has(id) || seen.has(id)) return;
-                        if (pendingOrderSync[id]) {
-                            mergedOrders.push({ ...pendingOrderSync[id] });
-                            seen.add(id);
-                        }
-                    });
-
-                    // Jangan pernah menggunakan response server kosong/parsial untuk menghapus
-                    // order lokal yang belum dikonfirmasi tersimpan di server.
-                    appData.orders = mergedOrders;
-
-                    // Pertahankan tanggal lokal jika server masih mengembalikan tanggal kosong.
-                    // Order tersebut tetap masuk antrean agar kolom date terisi di server.
-                    appData.orders.forEach(order => {
-                        const local = localOrdersById.get(String(order.id));
-                        if ((!order.date || String(order.date).trim() === '') && local?.date) {
-                            order.date = local.date;
-                            pendingOrderSync[String(order.id)] = { ...order };
-                        }
-                    });
-
-                    if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
-                    if (serverData.settings && typeof serverData.settings === 'object') {
-                        appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...serverData.settings };
-                    }
-
-                    if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) {
-                        mockUsers = serverData.users.map(u => ({
-                            ...u,
-                            username: u.username == null ? '' : String(u.username),
-                            password: u.password == null ? '' : String(u.password)
-                        }));
-                        const hasAdmin = mockUsers.some(u => String(u.username || '').trim().toLowerCase() === 'admin');
-                        if (!hasAdmin) mockUsers.unshift({ id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' });
-                    }
-
-                    this.saveLocalStorage();
-                    appData.orders.forEach(ensureOrderHistory);
-                    saveOrderHistories();
-
-                    // Kirim semua transaksi yang belum dikonfirmasi server. Diproses satu per
-                    // satu supaya aman untuk Customer ID atomik dan menghindari race condition.
-                    const pendingResult = await this.syncPendingOrders();
-                    if (pendingResult.failed > 0) {
-                        showToast(`${pendingResult.failed} transaksi belum tersinkron. Data tetap aman tersimpan di perangkat dan akan dicoba lagi.`, 'info');
-                    }
-
-                    if(badge) {
-                        badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition";
-                        if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-green-500";
-                        if(badgeText) badgeText.innerText = pendingResult.failed > 0 ? "Terhubung • Ada antrean sync" : "Terhubung ke Google Sheets";
-                    }
-                    showToast(pendingResult.failed > 0 ? 'Data berhasil dimuat. Transaksi yang belum tersinkron tetap dipertahankan.' : 'Data berhasil disinkronkan dari Google Sheets!', pendingResult.failed > 0 ? 'info' : 'success');
-                    this.navigate(this.currentView);
-                } else {
-                    // Jika server gagal, JANGAN mengubah appData.orders. Data lokal tetap
-                    // tampil dan pending queue akan dicoba kembali pada sync berikutnya.
-                    if(badge) {
-                        badge.className = "flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition";
-                        if(badgeDot) badgeDot.className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
-                        if(badgeText) badgeText.innerText = serverData.status === 'unconfigured' ? "Belum Terhubung (URL Kosong)" : "Belum Terhubung (Data Lokal Dipertahankan)";
-                    }
+                    setBadge('warning', serverData?.status === 'unconfigured' ? 'Belum Terhubung (URL Kosong)' : 'Belum Terhubung (Data Lokal Dipertahankan)', 'Google Sheets belum berhasil diakses. Data lokal dipertahankan sebagai fallback.');
+                    syncInProgress = false;
+                    return;
                 }
+
+                const rawServerOrders = Array.isArray(serverData.orders) ? serverData.orders : [];
+                // Kompatibilitas struktur Orders lama tetap dipertahankan.
+                const serverOrders = rawServerOrders.map(o => {
+                    const validOrderStatuses = Object.values(ORDER_STATUS);
+                    if (validOrderStatuses.includes(o.paymentStatus) && !isNaN(o.status) && o.status !== '') {
+                        const vals = Object.values(o);
+                        return {
+                            id: o.id,
+                            date: o.date,
+                            clientRequestId: o.clientRequestId,
+                            customerId: o.customerId,
+                            customerName: o.customerName,
+                            customerPhone: o.customerPhone,
+                            customerEmail: o.customerEmail,
+                            customerAddress: o.customerAddress,
+                            bookId: o.bookId,
+                            qty: o.qty,
+                            unitPrice: o.unitPrice,
+                            shippingCost: parseFloat(o.totalPrice) || 0,
+                            subtotal: o.subtotal,
+                            discountPercent: o.discountPercent,
+                            discountAmount: o.discountAmount,
+                            pointsUsed: o.pointsUsed,
+                            pointsDiscount: o.pointsDiscount,
+                            pointsEarned: o.pointsEarned,
+                            totalPrice: parseFloat(o.status) || 0,
+                            status: o.paymentStatus,
+                            paymentStatus: o.dpAmount,
+                            dpAmount: parseFloat(o.shippingVendor) || 0,
+                            shippingVendor: o.trackingNumber,
+                            trackingNumber: vals.length >= 15 ? vals[vals.length - 1] : ''
+                        };
+                    }
+                    return { ...o };
+                });
+
+                const incomingServerIds = new Set(serverOrders.map(o => String(o.id || '').trim()).filter(Boolean));
+                const duplicateIds = serverOrders.length !== incomingServerIds.size;
+                const serverReportedCount = Number(serverData.ordersCount);
+                const serverReportsComplete = serverData.ordersSnapshotComplete === true;
+                const serverCountMatches = Number.isFinite(serverReportedCount) && serverReportedCount === serverOrders.length;
+                const hasServerFingerprint = typeof serverData.ordersFingerprint === 'string' && serverData.ordersFingerprint.trim() !== '';
+                const calculatedFingerprint = computeOrdersFingerprint(serverOrders);
+                const fingerprintMatches = hasServerFingerprint && calculatedFingerprint === String(serverData.ordersFingerprint).trim();
+                const serverVersionMatches = String(serverData.serverVersion || '') === SERVER_EXPECTED_VERSION;
+                // Kompatibilitas dengan deployment V9: selama server menyatakan snapshot
+                // lengkap dan ordersCount sama dengan jumlah data yang diterima, snapshot tetap
+                // boleh menjadi authoritative. V10 menambahkan fingerprint + server version
+                // untuk integrity check yang lebih kuat.
+                const legacyAuthoritativeSnapshot = !hasServerFingerprint && !serverData.serverVersion &&
+                    !duplicateIds && serverReportsComplete && serverCountMatches;
+                const v10AuthoritativeSnapshot = !duplicateIds && serverReportsComplete && serverCountMatches &&
+                    fingerprintMatches && serverVersionMatches;
+                const authoritativeSnapshot = legacyAuthoritativeSnapshot || v10AuthoritativeSnapshot;
+                const authoritativeMode = v10AuthoritativeSnapshot ? 'V10 fingerprint' : (legacyAuthoritativeSnapshot ? 'legacy V9 metadata' : 'invalid');
+
+                lastSyncMeta = {
+                    engineVersion: SYNC_ENGINE_VERSION,
+                    status: authoritativeSnapshot ? 'authoritative' : 'invalid',
+                    authoritativeMode,
+                    at: new Date().toISOString(),
+                    serverGeneratedAt: serverData.serverGeneratedAt || null,
+                    serverVersion: serverData.serverVersion || null,
+                    serverOrdersCount: serverOrders.length,
+                    reportedOrdersCount: Number.isFinite(serverReportedCount) ? serverReportedCount : null,
+                    snapshotComplete: serverReportsComplete,
+                    fingerprint: serverData.ordersFingerprint || null,
+                    calculatedFingerprint,
+                    fingerprintMatches,
+                    serverVersionMatches,
+                    duplicateIds
+                };
+
+                // V18: baseline LocalStorage TIDAK lagi menentukan apakah server boleh diterima.
+                // Hanya snapshot yang dibuktikan lengkap oleh server + jumlah row + fingerprint
+                // yang boleh menjadi sumber kebenaran. Ini menghilangkan kondisi laptop A/B
+                // memiliki hasil berbeda hanya karena histori LocalStorage-nya berbeda.
+                if (!authoritativeSnapshot) {
+                    const reasons = [];
+                    if (!serverReportsComplete) reasons.push('server belum menyatakan snapshot lengkap');
+                    if (!serverCountMatches) reasons.push(`jumlah server ${Number.isFinite(serverReportedCount) ? serverReportedCount : '?'} ≠ data diterima ${serverOrders.length}`);
+                    if (!fingerprintMatches) reasons.push('fingerprint snapshot tidak cocok');
+                    if (!serverVersionMatches && !legacyAuthoritativeSnapshot) reasons.push(`deployment ${serverData.serverVersion || 'lama/tidak dikenal'}`);
+                    if (duplicateIds) reasons.push('ID transaksi duplikat');
+                    const reasonText = reasons.join('; ');
+                    setBadge('warning', 'Sync ditahan • Deployment perlu dicek', `Snapshot server tidak diterima: ${reasonText}. Data aplikasi saat ini dipertahankan agar tidak hilang.`);
+                    console.error('V18 SYNC DITAHAN: authoritative snapshot tidak valid.', lastSyncMeta);
+                    showToast(`Sinkronisasi server ditahan: ${reasonText || 'snapshot tidak valid'}.`, 'error');
+                    this.saveLocalStorage();
+                    syncInProgress = false;
+                    this.navigate(this.currentView);
+                    return;
+                }
+
+                // === SERVER AUTHORITATIVE ===
+                // Hapus seluruh order lokal yang sudah tidak ada di server, kecuali order
+                // yang benar-benar masih ada di pending queue. Tidak ada lagi safe-merge
+                // terhadap snapshot lokal lama.
+                const mergedOrders = [];
+                const seen = new Set();
+
+                for (const serverOrder of serverOrders) {
+                    const id = String(serverOrder.id || '').trim();
+                    if (!id || deletedOrderIds.has(id)) continue;
+                    const pending = pendingOrderSync[id];
+                    const local = localOrdersById.get(id);
+                    const chosen = pending ? { ...pending } : { ...serverOrder };
+                    if (!chosen.date && local?.date) chosen.date = local.date;
+                    mergedOrders.push(chosen);
+                    seen.add(id);
+                }
+
+                // Hanya transaksi yang benar-benar berada di pending queue boleh mengalahkan
+                // snapshot server. LocalStorage lama yang tidak ada di server tidak pernah
+                // dihidupkan kembali.
+                Object.keys(pendingOrderSync || {}).forEach(id => {
+                    if (deletedOrderIds.has(String(id)) || seen.has(String(id))) return;
+                    if (pendingOrderSync[id]) {
+                        mergedOrders.push({ ...pendingOrderSync[id] });
+                        seen.add(String(id));
+                    }
+                });
+
+                appData.orders = mergedOrders;
+                confirmedServerOrders = serverOrders.map(o => ({ ...o }));
+                knownServerOrderIds = new Set(incomingServerIds);
+                lastServerOrderCount = serverOrders.length;
+
+                if (serverData.books && Array.isArray(serverData.books) && serverData.books.length > 0) mockBooks = serverData.books;
+                if (serverData.settings && typeof serverData.settings === 'object') {
+                    appData.settings = { ...DEFAULT_LOYALTY_SETTINGS, ...serverData.settings };
+                }
+                if (serverData.users && Array.isArray(serverData.users) && serverData.users.length > 0) {
+                    mockUsers = serverData.users.map(u => ({
+                        ...u,
+                        username: u.username == null ? '' : String(u.username),
+                        password: u.password == null ? '' : String(u.password)
+                    }));
+                    const hasAdmin = mockUsers.some(u => String(u.username || '').trim().toLowerCase() === 'admin');
+                    if (!hasAdmin) mockUsers.unshift({ id: 'U001', username: 'admin', password: '12345', role: 'Administrator', name: 'Admin Utama' });
+                }
+
+                // Baseline lama sengaja di-reset menjadi baseline server terbaru.
+                this.saveLocalStorage();
+                appData.orders.forEach(ensureOrderHistory);
+                saveOrderHistories();
+
+                // Transaksi yang memang belum diterima server dikirim ulang. Setelah sukses,
+                // transaksi tidak lagi dianggap local-only pada siklus berikutnya.
+                const pendingResult = await this.syncPendingOrders();
+
+                const pendingCount = Object.keys(pendingOrderSync || {}).length;
+                const displayText = pendingResult.failed > 0
+                    ? 'Tersinkron • Ada antrean sync'
+                    : 'Terhubung ke Google Sheets';
+                const displayTitle = `Server authoritative (${authoritativeMode}) • ${serverOrders.length} transaksi` + (serverData.ordersFingerprint ? ` • FP ${serverData.ordersFingerprint}` : '') + (pendingCount ? ` • Pending ${pendingCount}` : '');
+                setBadge(pendingResult.failed > 0 ? 'warning' : 'success', displayText, displayTitle);
+
+                // Setelah snapshot valid diterapkan, perubahan lokal lama yang tidak ada di
+                // server sudah dibersihkan. Inilah titik yang memperbaiki laptop yang sebelumnya
+                // membawa LocalStorage stale dari V16/V17.
+                this.saveLocalStorage();
+                showToast(
+                    pendingResult.failed > 0
+                        ? `Data server terbaru dimuat. ${pendingResult.failed} transaksi masih menunggu sinkronisasi.`
+                        : `Data berhasil disinkronkan dari Google Sheets (${serverOrders.length} transaksi).`,
+                    pendingResult.failed > 0 ? 'info' : 'success'
+                );
                 syncInProgress = false;
+                this.navigate(this.currentView);
             },
 
             checkAuth() {
@@ -3827,7 +3872,7 @@
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
                 const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
-// Versi: Orders + Diskon + Loyalty Poin + Customer ID unik atomik + Settings + integrity snapshot + Excel Import Merge
+// Versi: V10 Server-Authoritative Sync + Integrity Fingerprint + Orders/Customer/Loyalty + Excel Import Merge
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -3843,22 +3888,29 @@ function handleRequest(e) {
     }
     var result = {};
     if (action === 'ping') {
-      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName() };
+      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), serverVersion:'YKBUT-PRESS-SERVER-V10' };
     } else if (action === 'diagnose') {
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       var diagSheet = ss.getSheetByName('Orders');
       var diagHeaders = diagSheet ? diagSheet.getRange(1,1,1,diagSheet.getLastColumn()).getValues()[0].map(function(h){return String(h).trim();}) : [];
-      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings') };
+      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings'), serverVersion:'YKBUT-PRESS-SERVER-V10', ordersCount:diagSheet ? Math.max(0, diagSheet.getLastRow()-1) : 0 };
     } else if (action === 'getAllData') {
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       var ordersSnapshot = getSheetData(ss,'Orders');
+      var booksSnapshot = getSheetData(ss,'Books');
+      var usersSnapshot = getSheetData(ss,'Users');
       result = {
         status:'success',
+        serverVersion:'YKBUT-PRESS-SERVER-V10',
+        serverGeneratedAt:new Date().toISOString(),
         orders:ordersSnapshot,
         ordersCount:ordersSnapshot.length,
         ordersSnapshotComplete:true,
-        books:getSheetData(ss,'Books'),
-        users:getSheetData(ss,'Users'),
+        ordersFingerprint:computeOrdersFingerprint(ordersSnapshot),
+        booksCount:booksSnapshot.length,
+        usersCount:usersSnapshot.length,
+        books:booksSnapshot,
+        users:usersSnapshot,
         settings:getSettings(ss)
       };
     } else if (action === 'setupOrders') {
@@ -4109,6 +4161,27 @@ function saveSettings(ss,obj){
   var values={defaultDiscountPercent:String(obj.defaultDiscountPercent||0),maxDiscountPercent:String(obj.maxDiscountPercent||0),rupiahPerPoint:String(obj.rupiahPerPoint||10000),pointValue:String(obj.pointValue||100),pointsRedemptionEnabled:String(obj.pointsRedemptionEnabled!==false)};
   Object.keys(values).forEach(function(k){if(rows[k])sheet.getRange(rows[k],2).setValue(values[k]);else sheet.appendRow([k,values[k]]);});
 }
+function canonicalizeOrderForFingerprint_(order){
+  var out={};
+  Object.keys(order || {}).sort().forEach(function(key){
+    if (key === 'isNewOrder' || key === 'isNewCustomer' || key === 'pendingDisplayNo' || key === 'localChangedAt') return;
+    var value = order[key];
+    if (value === null || value === undefined) value = '';
+    out[key] = String(value);
+  });
+  return out;
+}
+function computeOrdersFingerprint(orders){
+  var canonical = (orders || []).map(function(order){ return canonicalizeOrderForFingerprint_(order); });
+  canonical.sort(function(a,b){ return String(a.id || '').localeCompare(String(b.id || '')); });
+  var payload = canonical.map(function(item){ return JSON.stringify(item); }).join('\u001e');
+  var hash = 2166136261 >>> 0;
+  for (var i=0;i<payload.length;i++) {
+    hash ^= payload.charCodeAt(i);
+    hash = (hash * 16777619) >>> 0;
+  }
+  return ('00000000' + hash.toString(16)).slice(-8);
+}
 function getSheetData(ss,sheetName){
   var sheet=ss.getSheetByName(sheetName); if(!sheet)return []; var data=sheet.getDataRange().getValues(); if(data.length<=1)return [];
   var headers=data[0]; var rows=[];
@@ -4176,6 +4249,7 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                                             </ul>
                                         </li>
                                         <li>Klik <strong>Deploy</strong>, lalu salin <strong>Web App URL</strong> yang dihasilkan dan tempelkan di kotak isian di atas.</li>
+                                        <li><strong>Pastikan Server Engine V10 terdeteksi</strong> pada menu Diagnosa. V18 menggunakan Google Sheets sebagai sumber data utama; LocalStorage hanya menjadi cache/fallback dan transaksi pending.</li>
                                     </ol>
                                 </div>
                                 <div class="mt-4">
@@ -4198,8 +4272,10 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                 const data = await apiService.diagnose();
                 if (data && data.status === 'success') {
                     const correct = data.spreadsheetId === SPREADSHEET_CONFIG.TARGET_SHEET_ID && data.ordersSheet && data.hasDateColumn;
-                    resultDiv.className = correct ? 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200' : 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
-                    resultDiv.innerHTML = 'Deployment: <strong>' + (correct ? 'VALID' : 'PERLU DIPERBAIKI') + '</strong><br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + '<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Header: ' + (data.headers || []).join(', ');
+                    const legacySyncReady = !data.serverVersion && Number.isFinite(Number(data.ordersCount));
+                    const syncReady = data.serverVersion === SERVER_EXPECTED_VERSION || legacySyncReady;
+                    resultDiv.className = (correct && syncReady) ? 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200' : 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
+                    resultDiv.innerHTML = 'Deployment: <strong>' + ((correct && syncReady) ? 'VALID & SYNC READY' : 'PERLU DIPERBAIKI') + '</strong><br>Web App URL dipakai: ' + escapeHtml(getWebAppUrl()) + '<br>Server Version: ' + (data.serverVersion || 'Legacy V9') + '<br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + ' (' + (Number.isFinite(Number(data.ordersCount)) ? Number(data.ordersCount) : '?') + ' transaksi)<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Server Snapshot Engine: ' + (data.serverVersion === SERVER_EXPECTED_VERSION ? 'V10 fingerprint' : (legacySyncReady ? 'Legacy metadata aman' : 'DEPLOYMENT LAMA/TIDAK LENGKAP')) + '<br>Header: ' + (data.headers || []).join(', ');
                 } else {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-red-50 text-red-700 border border-red-200';
                     resultDiv.innerHTML = '<i class="ph ph-x-circle mr-1"></i> ' + String(data?.message || 'Deployment tidak dapat diakses').replace(/</g,'&lt;');
@@ -4207,7 +4283,15 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
             },
 
             saveWebAppUrl() {
-                const url = document.getElementById('input-webapp-url').value.trim();
+                const rawUrl = document.getElementById('input-webapp-url').value.trim();
+                const url = rawUrl.replace(/[\s]+$/g, '');
+                if (url && !isValidWebAppUrl(url)) {
+                    const resultDiv = document.getElementById('diagnostic-result');
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-red-50 text-red-700 border border-red-200';
+                    resultDiv.innerHTML = '<i class="ph ph-x-circle mr-1"></i> Format URL Web App tidak valid. Gunakan URL yang berakhir dengan /exec.';
+                    return;
+                }
                 localStorage.setItem('ykbut_webapp_url', url);
                 
                 const resultDiv = document.getElementById('diagnostic-result');
@@ -4223,9 +4307,11 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                             if(data.status !== 'success') throw new Error(data.message || 'Deployment tidak mengembalikan status success');
                             if(data.spreadsheetId !== SPREADSHEET_CONFIG.TARGET_SHEET_ID) throw new Error('Web App mengarah ke Spreadsheet ID berbeda: ' + (data.spreadsheetId || '-'));
                             if(!data.ordersSheet || !data.hasDateColumn) throw new Error('Sheet Orders atau kolom date belum tersedia pada deployment aktif.');
-                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200';
-                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> Deployment aktif, Spreadsheet ID benar, sheet Orders tersedia, dan kolom date sudah tersedia.';
-                            showToast('Koneksi + schema Google Sheets tervalidasi.', 'success');
+                            const isV10 = data.serverVersion === SERVER_EXPECTED_VERSION;
+                            const isLegacyReady = !data.serverVersion && Number.isFinite(Number(data.ordersCount));
+                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono ' + (isV10 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200');
+                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> ' + (isV10 ? 'Deployment V10 aktif & siap sinkronisasi authoritative dengan fingerprint.' : (isLegacyReady ? 'Deployment legacy terdeteksi. Sinkronisasi authoritative tetap aman karena ordersCount + snapshot metadata tersedia. V10 direkomendasikan untuk integrity fingerprint.' : 'Deployment aktif, tetapi metadata snapshot belum lengkap. Gunakan Kode Apps Script V10 dari aplikasi.'));
+                            showToast(isV10 ? 'Koneksi + schema + fingerprint Google Sheets tervalidasi.' : (isLegacyReady ? 'Koneksi valid. Gunakan V10 untuk integrity fingerprint yang lebih kuat.' : 'Deployment perlu diperbarui.'), isV10 ? 'success' : 'info');
                             this.syncFromSpreadsheet();
                         })
                         .catch(err => {
