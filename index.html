@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System V21</title>
+    <title>YKBUT Press Order Management System V22</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -983,6 +983,21 @@
             return Array.from(counts.entries()).filter(([, count]) => count > 1).map(([id, count]) => ({ id, count }));
         }
 
+        // V22: satu sumber perhitungan nilai yang ditampilkan pada Data Pemesanan
+        // dan Struk Thermal. Prioritas utama mengikuti kolom `subtotal` (kolom R)
+        // dari Google Sheets, yang pada sistem ini merepresentasikan harga buku + ongkir
+        // sebelum potongan poin/diskon. Fallback hanya untuk data lama yang belum memiliki subtotal.
+        function getOrderSubtotalAmount(order) {
+            const rawSubtotal = order?.subtotal;
+            if (rawSubtotal !== undefined && rawSubtotal !== null && String(rawSubtotal).trim() !== '' && Number.isFinite(Number(rawSubtotal))) {
+                return Number(rawSubtotal);
+            }
+            const qty = Math.max(0, Number(order?.qty || 0));
+            const unitPrice = Math.max(0, Number(order?.unitPrice || 0));
+            const shipping = Math.max(0, Number(order?.shippingCost || 0));
+            return (qty * unitPrice) + shipping;
+        }
+
         function calculateOrderWithShipping(order, newShipping) {
             const shippingCost = Math.max(0, Number(newShipping) || 0);
             const qty = Math.max(0, Number(order?.qty || 0));
@@ -1939,24 +1954,11 @@
 
                 const filteredOrders = this.getFilteredOrders();
 
-                // V21: angka utama pada kolom "TOTAL HARGA" Data Pemesanan
-                // harus bersumber dari kolom `subtotal` (kolom R) di Google Sheets.
-                // Fallback hanya dipakai untuk record lama yang belum memiliki nilai subtotal.
-                const getOrderTableAmount = (order) => {
-                    const rawSubtotal = order?.subtotal;
-                    if (rawSubtotal !== undefined && rawSubtotal !== null && String(rawSubtotal).trim() !== '' && Number.isFinite(Number(rawSubtotal))) {
-                        return Number(rawSubtotal);
-                    }
-                    const qty = Math.max(0, Number(order?.qty || 0));
-                    const unitPrice = Math.max(0, Number(order?.unitPrice || 0));
-                    const shipping = Math.max(0, Number(order?.shippingCost || 0));
-                    return (qty * unitPrice) + shipping;
-                };
-
+                // V22: Data Pemesanan memakai sumber nilai yang sama dengan Struk Thermal.
                 let tableRows = filteredOrders.map((order) => {
                     const book = getBook(order.bookId);
                     const bookTitle = book ? book.title : '<span class="text-red-500">Buku tidak ditemukan</span>';
-                    const tableAmount = getOrderTableAmount(order);
+                    const tableAmount = getOrderSubtotalAmount(order);
                     return `
                     <tr class="border-b hover:bg-gray-50 transition-colors">
                         <td class="py-3 px-4 text-sm font-medium text-gray-800">${getOrderDisplayId(order)}</td>
@@ -3367,8 +3369,11 @@
                 const printArea = document.getElementById('print-area');
                 if(!printArea) return;
 
-                const sisaTagihan = Math.max(0, Number(order.totalPrice || 0) - Number(order.dpAmount || 0));
                 const itemTotal = Number(order.qty || 0) * Number(order.unitPrice || 0);
+                // V22: TOTAL pada struk harus konsisten dengan Data Pemesanan,
+                // yaitu kolom `subtotal` (kolom R) = harga buku + ongkir.
+                const thermalTotal = getOrderSubtotalAmount(order);
+                const sisaTagihan = Math.max(0, thermalTotal - Number(order.dpAmount || 0));
                 const safe = (value) => String(value ?? '-')
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
@@ -3443,7 +3448,7 @@
 
                         <div class="receipt-row receipt-total" style="margin-bottom:3px;">
                             <span>TOTAL</span>
-                            <span>${safe(formatRupiah(order.totalPrice))}</span>
+                            <span>${safe(formatRupiah(thermalTotal))}</span>
                         </div>
 
                         ${paymentInfoHtml}
