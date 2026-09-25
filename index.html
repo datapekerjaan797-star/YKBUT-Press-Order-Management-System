@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System V22</title>
+    <title>YKBUT Press Order Management System V24</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -685,8 +685,8 @@
             return storedUrl;
         }
 
-        const SYNC_ENGINE_VERSION = 'V23_SERVER_AUTHORITATIVE_STATUS_EDIT_VERIFY';
-        const SERVER_EXPECTED_VERSION = 'YKBUT-PRESS-SERVER-V12';
+        const SYNC_ENGINE_VERSION = 'V24_SERVER_AUTHORITATIVE_STATUS_EDIT_BACKWARD_COMPAT';
+        const SUPPORTED_SERVER_VERSIONS = new Set(['YKBUT-PRESS-SERVER-V10','YKBUT-PRESS-SERVER-V11','YKBUT-PRESS-SERVER-V12']);
         const FINGERPRINT_EXCLUDED_KEYS = new Set(['isNewOrder','isNewCustomer','pendingDisplayNo','localChangedAt']);
 
         const canonicalizeOrderForFingerprint = (order) => {
@@ -1177,7 +1177,12 @@
                     const order = pendingOrderSync[id];
                     if (!order) { delete pendingOrderSync[id]; continue; }
                     try {
-                        const res = await apiService.sendAction('saveOrder', order);
+                        // V24: order baru tetap memakai clientRequestId untuk idempotency.
+                        // Order existing yang diedit harus dikirim berdasarkan ORD-XXX, bukan
+                        // clientRequestId lama. Ini membuat deployment V11 tetap kompatibel.
+                        const syncPayload = { ...order };
+                        if (syncPayload.isNewOrder !== true) delete syncPayload.clientRequestId;
+                        const res = await apiService.sendAction('saveOrder', syncPayload);
                         if (res && res.status === 'success') {
                             const finalId = String(res.id || id);
                             if (finalId !== String(id)) {
@@ -1317,17 +1322,18 @@
                 const hasServerFingerprint = typeof serverData.ordersFingerprint === 'string' && serverData.ordersFingerprint.trim() !== '';
                 const calculatedFingerprint = computeOrdersFingerprint(serverOrders);
                 const fingerprintMatches = hasServerFingerprint && calculatedFingerprint === String(serverData.ordersFingerprint).trim();
-                const serverVersionMatches = String(serverData.serverVersion || '') === SERVER_EXPECTED_VERSION;
-                // Kompatibilitas dengan deployment V9: selama server menyatakan snapshot
-                // lengkap dan ordersCount sama dengan jumlah data yang diterima, snapshot tetap
-                // boleh menjadi authoritative. V11 menambahkan fingerprint + server version + unique ID guard
-                // untuk integrity check yang lebih kuat.
+                const serverVersion = String(serverData.serverVersion || '').trim();
+                const serverVersionMatches = SUPPORTED_SERVER_VERSIONS.has(serverVersion);
+                // V24: V10/V11/V12 yang mengirim snapshot lengkap + fingerprint dianggap kompatibel.
+                // Tidak boleh ada hard-block hanya karena deployment aktif belum di-upgrade ke V12.
+                // Untuk EDIT existing, V24 menghapus clientRequestId sebelum saveOrder sehingga V11
+                // tetap dapat melakukan upsert berdasarkan ORD-XXX.
                 const legacyAuthoritativeSnapshot = !hasServerFingerprint && !serverData.serverVersion &&
                     !duplicateIds && serverReportsComplete && serverCountMatches;
-                const v11AuthoritativeSnapshot = !duplicateIds && serverReportsComplete && serverCountMatches &&
+                const compatibleAuthoritativeSnapshot = !duplicateIds && serverReportsComplete && serverCountMatches &&
                     fingerprintMatches && serverVersionMatches;
-                const authoritativeSnapshot = legacyAuthoritativeSnapshot || v11AuthoritativeSnapshot;
-                const authoritativeMode = v11AuthoritativeSnapshot ? 'V11 fingerprint + unique ID' : (legacyAuthoritativeSnapshot ? 'legacy metadata' : 'invalid');
+                const authoritativeSnapshot = legacyAuthoritativeSnapshot || compatibleAuthoritativeSnapshot;
+                const authoritativeMode = compatibleAuthoritativeSnapshot ? `${serverVersion} fingerprint + unique ID` : (legacyAuthoritativeSnapshot ? 'legacy metadata' : 'invalid');
 
                 lastSyncMeta = {
                     engineVersion: SYNC_ENGINE_VERSION,
@@ -1355,7 +1361,7 @@
                     if (!serverReportsComplete) reasons.push('server belum menyatakan snapshot lengkap');
                     if (!serverCountMatches) reasons.push(`jumlah server ${Number.isFinite(serverReportedCount) ? serverReportedCount : '?'} ≠ data diterima ${serverOrders.length}`);
                     if (!fingerprintMatches) reasons.push('fingerprint snapshot tidak cocok');
-                    if (!serverVersionMatches && !legacyAuthoritativeSnapshot) reasons.push(`deployment ${serverData.serverVersion || 'lama/tidak dikenal'}`);
+                    if (!serverVersionMatches && !legacyAuthoritativeSnapshot) reasons.push(`deployment ${serverVersion || 'lama/tidak dikenal'}`);
                     if (duplicateIds) reasons.push('ID transaksi duplikat');
                     const reasonText = reasons.join('; ');
                     setBadge('warning', 'Sync ditahan • Deployment perlu dicek', `Snapshot server tidak diterima: ${reasonText}. Data aplikasi saat ini dipertahankan agar tidak hilang.`);
@@ -3011,29 +3017,36 @@
                 this.renderOrders(document.getElementById('app-content'));
 
                 showToast('Mengirim update ke Google Sheets...', 'info');
-                const res = await apiService.sendAction('saveOrder', order);
+                // V24: jangan kirim clientRequestId lama saat EDIT. Deployment V11 menggunakan
+                // clientRequestId sebagai idempotency key dan dapat mengembalikan success tanpa
+                // menulis perubahan jika requestId lama ditemukan. Dengan menghapus field ini,
+                // server pasti melakukan upsert berdasarkan ID transaksi ORD-XXX.
+                const editPayload = { ...order, isNewOrder:false, isNewCustomer:false };
+                delete editPayload.clientRequestId;
+                const res = await apiService.sendAction('saveOrder', editPayload);
                 if(res && res.status === 'success') {
                     const saved = res.order || {};
                     Object.keys(saved).forEach(k => { if (saved[k] !== undefined) order[k] = saved[k]; });
-                    // Jangan hapus pending hanya karena server mengembalikan status success.
-                    // V12 juga memverifikasi ulang state aktual di Sheets agar perubahan status
-                    // benar-benar tersimpan sebelum queue lokal dibuang.
                     const verify = await verifyOrderStateOnServer(order.id, order);
                     if (verify.ok) {
                         delete pendingOrderSync[String(order.id)];
                         this.saveLocalStorage();
-                        showToast('Perubahan status berhasil tersimpan di Google Sheets!', 'success');
+                        showToast('Perubahan status berhasil tersimpan dan diverifikasi di Google Sheets!', 'success');
                     } else {
-                        // Tetap antrekan agar retry otomatis 60 detik tetap berjalan.
-                        pendingOrderSync[String(order.id)] = { ...order };
+                        // Pending tetap dipertahankan. Retry otomatis akan mengirim tanpa clientRequestId.
+                        const retryPayload = { ...editPayload, localChangedAt: Date.now() };
+                        delete retryPayload.clientRequestId;
+                        pendingOrderSync[String(order.id)] = retryPayload;
                         this.saveLocalStorage();
                         console.error('Verifikasi perubahan status gagal:', verify);
                         showToast('Perubahan tampil di aplikasi, tetapi belum terverifikasi di Google Sheets. Sistem akan mencoba menyimpan ulang otomatis.', 'error');
                     }
                 } else {
-                    // Queue tetap ada sehingga retry 60 detik akan mengirim ulang.
+                    const retryPayload = { ...editPayload, localChangedAt: Date.now() };
+                    delete retryPayload.clientRequestId;
+                    pendingOrderSync[String(order.id)] = retryPayload;
                     this.saveLocalStorage();
-                    showToast('Google Sheets menolak penyimpanan. Perubahan tetap masuk antrean sync: ' + (res?.message || 'deployment belum siap'), 'error');
+                    showToast('Google Sheets belum menerima perubahan. Update tetap diantrikan dan akan dicoba kembali otomatis.', 'error');
                 }
             },
 
@@ -4558,9 +4571,12 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                 if (data && data.status === 'success') {
                     const correct = data.spreadsheetId === SPREADSHEET_CONFIG.TARGET_SHEET_ID && data.ordersSheet && data.hasDateColumn;
                     const legacySyncReady = !data.serverVersion && Number.isFinite(Number(data.ordersCount));
-                    const syncReady = data.serverVersion === SERVER_EXPECTED_VERSION || legacySyncReady;
+                    const compatibleServer = SUPPORTED_SERVER_VERSIONS.has(String(data.serverVersion || '').trim());
+                    const syncReady = compatibleServer || legacySyncReady;
+                    const serverLabel = data.serverVersion || 'Legacy';
+                    const engineLabel = compatibleServer ? (serverLabel + ' fingerprint + unique ID + backward-compatible edit persistence') : (legacySyncReady ? 'Legacy metadata aman' : 'DEPLOYMENT LAMA/TIDAK LENGKAP');
                     resultDiv.className = (correct && syncReady) ? 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200' : 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
-                    resultDiv.innerHTML = 'Deployment: <strong>' + ((correct && syncReady) ? 'VALID & SYNC READY' : 'PERLU DIPERBAIKI') + '</strong><br>Web App URL dipakai: ' + escapeHtml(getWebAppUrl()) + '<br>Server Version: ' + (data.serverVersion || 'Legacy V9') + '<br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + ' (' + (Number.isFinite(Number(data.ordersCount)) ? Number(data.ordersCount) : '?') + ' transaksi)<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Server Snapshot Engine: ' + (data.serverVersion === SERVER_EXPECTED_VERSION ? 'V12 fingerprint + unique ID + edit persistence guard' : (legacySyncReady ? 'Legacy metadata aman' : 'DEPLOYMENT LAMA/TIDAK LENGKAP')) + '<br>Header: ' + (data.headers || []).join(', ');
+                    resultDiv.innerHTML = 'Deployment: <strong>' + ((correct && syncReady) ? 'VALID & SYNC READY' : 'PERLU DIPERBAIKI') + '</strong><br>Web App URL dipakai: ' + escapeHtml(getWebAppUrl()) + '<br>Server Version: ' + escapeHtml(serverLabel) + '<br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + ' (' + (Number.isFinite(Number(data.ordersCount)) ? Number(data.ordersCount) : '?') + ' transaksi)<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Server Snapshot Engine: ' + escapeHtml(engineLabel) + '<br>Header: ' + (data.headers || []).join(', ');
                 } else {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-red-50 text-red-700 border border-red-200';
                     resultDiv.innerHTML = '<i class="ph ph-x-circle mr-1"></i> ' + String(data?.message || 'Deployment tidak dapat diakses').replace(/</g,'&lt;');
@@ -4592,11 +4608,12 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                             if(data.status !== 'success') throw new Error(data.message || 'Deployment tidak mengembalikan status success');
                             if(data.spreadsheetId !== SPREADSHEET_CONFIG.TARGET_SHEET_ID) throw new Error('Web App mengarah ke Spreadsheet ID berbeda: ' + (data.spreadsheetId || '-'));
                             if(!data.ordersSheet || !data.hasDateColumn) throw new Error('Sheet Orders atau kolom date belum tersedia pada deployment aktif.');
-                            const isV12 = data.serverVersion === SERVER_EXPECTED_VERSION;
+                            const serverIsCompatible = SUPPORTED_SERVER_VERSIONS.has(String(data.serverVersion || '').trim());
                             const isLegacyReady = !data.serverVersion && Number.isFinite(Number(data.ordersCount));
-                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono ' + (isV12 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200');
-                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> ' + (isV12 ? 'Deployment V12 aktif & siap sinkronisasi authoritative dengan status edit persistence + fingerprint + unique ID guard.' : (isLegacyReady ? 'Deployment legacy terdeteksi. Sinkronisasi authoritative tetap aman bila metadata lengkap. V12 direkomendasikan untuk penyimpanan perubahan status yang terverifikasi + unique ID guard + fingerprint.' : 'Deployment aktif, tetapi metadata snapshot belum lengkap. Gunakan Kode Apps Script V12 dari aplikasi.'));
-                            showToast(isV12 ? 'Koneksi + schema + fingerprint Google Sheets tervalidasi.' : (isLegacyReady ? 'Koneksi valid. Gunakan V11 untuk unique ID guard + integrity fingerprint.' : 'Deployment perlu diperbarui.'), isV12 ? 'success' : 'info');
+                            const ready = serverIsCompatible || isLegacyReady;
+                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono ' + (ready ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200');
+                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> ' + (serverIsCompatible ? ('Deployment ' + String(data.serverVersion) + ' aktif & kompatibel. V24 akan mempertahankan edit status pada deployment ini.') : (isLegacyReady ? 'Deployment legacy terdeteksi. Sinkronisasi authoritative tetap aman bila metadata lengkap.' : 'Deployment aktif, tetapi metadata snapshot belum lengkap.'));
+                            showToast(serverIsCompatible ? 'Koneksi + schema + snapshot server tervalidasi.' : (isLegacyReady ? 'Koneksi valid dengan deployment legacy.' : 'Deployment perlu diperbarui.'), ready ? 'success' : 'warning');
                             this.syncFromSpreadsheet();
                         })
                         .catch(err => {
