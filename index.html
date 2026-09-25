@@ -1042,21 +1042,26 @@
             DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwzG-MzCnvZhzYZdO2sPCFGwu10uDLRQNHSXMaOwJTf79utt70zlZQ-8TO8HHn25b1I/exec"
         };
 
-        // V28: Cover buku diperlakukan sebagai asset statis GitHub Pages.
-        // Folder repository yang dipakai adalah /cover/ (singular).
-        // Tidak ada GitHub token di browser, sehingga workflow tetap aman.
-        // V28 juga tetap mengenali URL lama /covers/ dan otomatis menormalkannya
-        // ke /cover/ agar data buku yang sudah tersimpan tidak perlu diedit satu per satu.
+        // V30: Cover buku disesuaikan dengan file GitHub yang saat ini diunggah:
+        // B001.jpeg, B002.jpeg, B003.jpeg, dan seterusnya.
+        // Folder repository: /cover/ (singular).
+        // Standar utama aplikasi sekarang adalah ID BUKU + .jpeg.
+        // Contoh: B001 -> https://.../cover/B001.jpeg
+        // Untuk ketahanan terhadap file lama, .jpg/.png/.webp tetap dicoba sebagai fallback.
         const GITHUB_BOOK_COVER_CONFIG = {
             pagesBaseUrl: "https://datapekerjaan797-star.github.io/YKBUT-Press-Order-Management-System/cover/",
+            rawBaseUrl: "https://raw.githubusercontent.com/datapekerjaan797-star/YKBUT-Press-Order-Management-System/main/cover/",
             legacyPagesBaseUrl: "https://datapekerjaan797-star.github.io/YKBUT-Press-Order-Management-System/covers/",
             repoUrl: "https://github.com/datapekerjaan797-star/YKBUT-Press-Order-Management-System",
-            uploadUrl: "https://github.com/datapekerjaan797-star/YKBUT-Press-Order-Management-System/upload/main/cover"
+            uploadUrl: "https://github.com/datapekerjaan797-star/YKBUT-Press-Order-Management-System/upload/main/cover",
+            preferredExtension: 'jpeg',
+            fallbackExtensions: ['jpg', 'png', 'webp']
         };
 
-        const githubBookCoverFileName = (bookId) => {
+        const githubBookCoverFileName = (bookId, ext = GITHUB_BOOK_COVER_CONFIG.preferredExtension) => {
             const safe = String(bookId || 'BOOK').trim().replace(/[^A-Za-z0-9_-]/g, '_');
-            return safe + '.jpg';
+            const cleanExt = String(ext || GITHUB_BOOK_COVER_CONFIG.preferredExtension).replace(/^\./, '').toLowerCase();
+            return safe + '.' + cleanExt;
         };
 
         const normalizeGithubBookCoverUrl = (url) => {
@@ -1068,39 +1073,85 @@
             );
         };
 
-        const getBookCoverUrl = (book) => {
-            if (!book) return '';
+        const getBookCoverUrlCandidates = (book) => {
+            if (!book) return [];
             const id = String(book.id || '').trim();
+            if (!id) return [];
             const previews = window.__ykbutGithubCoverPreview || {};
-            if (previews[id]) return previews[id];
+            if (previews[id]) return [previews[id]];
 
+            const candidates = [];
+            const addCandidate = (url) => {
+                const clean = String(url || '').trim();
+                if (clean && !candidates.includes(clean)) candidates.push(clean);
+            };
+
+            // PRIORITAS 1: nama file yang benar-benar dipakai di GitHub saat ini.
+            // B001.jpeg / B002.jpeg / B003.jpeg / ...
+            const preferredName = githubBookCoverFileName(id, 'jpeg');
+            addCandidate(`${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(preferredName)}`);
+
+            // PRIORITAS 2: fallback ekstensi di GitHub Pages.
+            GITHUB_BOOK_COVER_CONFIG.fallbackExtensions.forEach(ext => {
+                addCandidate(`${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(id, ext))}`);
+            });
+
+            // PRIORITAS 3: fallback langsung ke raw.githubusercontent.com.
+            // Ini membantu bila GitHub Pages sedang terlambat memperbarui file.
+            addCandidate(`${GITHUB_BOOK_COVER_CONFIG.rawBaseUrl}${encodeURIComponent(preferredName)}`);
+            GITHUB_BOOK_COVER_CONFIG.fallbackExtensions.forEach(ext => {
+                addCandidate(`${GITHUB_BOOK_COVER_CONFIG.rawBaseUrl}${encodeURIComponent(githubBookCoverFileName(id, ext))}`);
+            });
+
+            // PRIORITAS 4: URL lama yang tersimpan di Google Sheets/LocalStorage.
             const stored = normalizeGithubBookCoverUrl(book.imageUrl);
-            // Jika URL cover sudah tersimpan di Sheets, gunakan URL tersebut setelah
-            // dinormalisasi. Jika belum ada, langsung bentuk URL dari ID buku.
-            // Dengan begitu cover yang sudah berada di GitHub dapat tampil tanpa
-            // memerlukan edit manual pada Google Sheets.
-            if (stored) return stored;
-            if (id) {
-                return `${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(id))}`;
-            }
-            return '';
+            addCandidate(stored);
+
+            return candidates;
         };
 
-        // Ketika file cover sudah ada di GitHub tetapi imageUrl lama masih menunjuk
-        // /covers/, fallback ini mencoba lokasi /cover/ yang benar. Jika cover benar-
-        // benar belum ada, elemen image disembunyikan dan placeholder mengambil alih.
+        const getBookCoverUrl = (book) => getBookCoverUrlCandidates(book)[0] || '';
+
+        // Jika URL pertama gagal, coba nama file yang sama dengan ekstensi berikutnya.
+        // Urutan praktis: .jpeg -> .jpg -> .png -> .webp.
         window.__ykbutBookCoverError = function(img) {
             if (!img) return;
-            const fallbackUrl = img.getAttribute('data-github-fallback') || '';
-            const attempted = img.getAttribute('data-github-fallback-used') === '1';
-            if (!attempted && fallbackUrl) {
-                img.setAttribute('data-github-fallback-used', '1');
-                img.src = fallbackUrl + (fallbackUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
+            const originalSrc = String(img.getAttribute('src') || img.src || '');
+            const attempts = Number(img.getAttribute('data-cover-attempts') || '0');
+            const allExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+            const currentMatch = originalSrc.split('?')[0].match(/\.([a-z0-9]+)$/i);
+            const currentExt = currentMatch ? currentMatch[1].toLowerCase() : '';
+            const nextExtensions = allExtensions.filter(ext => ext !== currentExt);
+
+            if (attempts < nextExtensions.length) {
+                let base = originalSrc.split('?')[0];
+                base = base.replace(/\.(jpg|jpeg|png|webp)$/i, '');
+                const nextUrl = base + '.' + nextExtensions[attempts] + '?v=' + Date.now();
+                img.setAttribute('data-cover-attempts', String(attempts + 1));
+                img.src = nextUrl;
                 return;
             }
+
             img.style.display = 'none';
             const next = img.nextElementSibling;
             if (next) next.classList.remove('hidden');
+        };
+
+        const copyTextToClipboard = async (text) => {
+            try {
+                await navigator.clipboard.writeText(String(text || ''));
+                showToast(`Nama file \"${text}\" berhasil disalin.`, 'success');
+                return true;
+            } catch (e) {
+                const ta = document.createElement('textarea');
+                ta.value = String(text || '');
+                ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+                ta.remove();
+                if (ok) showToast(`Nama file \"${text}\" berhasil disalin.`, 'success');
+                return ok;
+            }
         };
 
         function openGithubCoverUpload() {
@@ -4288,6 +4339,16 @@
                                             <button type="button" onclick="openGithubCoverUpload()" class="px-4 py-2 bg-slate-900 text-white rounded-lg font-semibold text-sm shadow hover:bg-slate-800 transition"><i class="ph ph-github-logo mr-2"></i>Buka GitHub</button>
                                         </div>
                                         <p class="text-xs text-slate-500 mt-3">JPG, PNG, atau WebP • otomatis diperkecil • simpan asset di folder <strong>/cover/</strong> GitHub Pages</p>
+                                        <div class="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-left">
+                                            <div class="flex items-center justify-between gap-3 flex-wrap">
+                                                <div>
+                                                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Format nama file cover</div>
+                                                    <div class="font-mono text-sm font-black text-slate-800 mt-1">${book ? escapeHtml(githubBookCoverFileName(book.id)) : 'B001.jpeg'}</div>
+                                                    <div class="text-[10px] text-slate-500 mt-1">Wajib sama persis dengan ID Buku. Contoh: B001.jpeg, B002.jpg, B003.jpg</div>
+                                                </div>
+                                                <button type="button" onclick="copyTextToClipboard('${escapeHtml(book ? githubBookCoverFileName(book.id) : 'B001.jpeg')}')" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-100 transition"><i class="ph ph-copy mr-1"></i>Salin Nama</button>
+                                            </div>
+                                        </div>
                                     </div>
                                     <button type="button" id="btn-remove-book-image" class="${book && getBookCoverUrl(book) ? '' : 'hidden'} text-xs font-semibold text-red-600 hover:underline"><i class="ph ph-trash mr-1"></i>Hapus cover</button>
                                     <div id="book-image-status" class="text-xs text-slate-500"></div>
@@ -4458,7 +4519,7 @@
                         showToast('Menyimpan data buku ke Google Sheets...', 'info');
                         const saveRes = await apiService.sendAction('saveBook', bookData);
                         if (saveRes?.status !== 'success') throw new Error(saveRes?.message || 'Data buku gagal disimpan.');
-                        showToast('Data buku & cover berhasil tersimpan!', 'success');
+                        showToast(`Data buku tersimpan. Pastikan cover GitHub memakai nama ${githubBookCoverFileName(bookData.id)} di folder /cover/.`, 'success');
                     } catch (err) {
                         console.error('Save book error:', err);
                         showToast('Data buku belum lengkap tersimpan: ' + String(err.message || err), 'error');
