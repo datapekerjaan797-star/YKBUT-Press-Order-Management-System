@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System V26 • Futuristic UI</title>
+    <title>YKBUT Press Order Management System V27 • Futuristic UI</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -579,7 +579,7 @@
 
 
         /* =========================================================
-         * V26 FUTURISTIC UI LAYER
+         * V27 FUTURISTIC UI LAYER
          * Visual-only enhancement: no business logic or data flow changed.
          * ========================================================= */
         @media screen {
@@ -920,7 +920,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -955,7 +955,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -1041,6 +1041,72 @@
             TARGET_SHEET_ID: "115m5DYcwSiH6cEOkIBWgdsBG_59a6SPHyWj4V0EZqp8",
             DEFAULT_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwzG-MzCnvZhzYZdO2sPCFGwu10uDLRQNHSXMaOwJTf79utt70zlZQ-8TO8HHn25b1I/exec"
         };
+
+        // V28: Cover buku diperlakukan sebagai asset statis GitHub Pages.
+        // Folder repository yang dipakai adalah /cover/ (singular).
+        // Tidak ada GitHub token di browser, sehingga workflow tetap aman.
+        // V28 juga tetap mengenali URL lama /covers/ dan otomatis menormalkannya
+        // ke /cover/ agar data buku yang sudah tersimpan tidak perlu diedit satu per satu.
+        const GITHUB_BOOK_COVER_CONFIG = {
+            pagesBaseUrl: "https://datapekerjaan797-star.github.io/YKBUT-Press-Order-Management-System/cover/",
+            legacyPagesBaseUrl: "https://datapekerjaan797-star.github.io/YKBUT-Press-Order-Management-System/covers/",
+            repoUrl: "https://github.com/datapekerjaan797-star/YKBUT-Press-Order-Management-System",
+            uploadUrl: "https://github.com/datapekerjaan797-star/YKBUT-Press-Order-Management-System/upload/main/cover"
+        };
+
+        const githubBookCoverFileName = (bookId) => {
+            const safe = String(bookId || 'BOOK').trim().replace(/[^A-Za-z0-9_-]/g, '_');
+            return safe + '.jpg';
+        };
+
+        const normalizeGithubBookCoverUrl = (url) => {
+            const value = String(url || '').trim();
+            if (!value) return '';
+            return value.replace(
+                'https://datapekerjaan797-star.github.io/YKBUT-Press-Order-Management-System/covers/',
+                GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl
+            );
+        };
+
+        const getBookCoverUrl = (book) => {
+            if (!book) return '';
+            const id = String(book.id || '').trim();
+            const previews = window.__ykbutGithubCoverPreview || {};
+            if (previews[id]) return previews[id];
+
+            const stored = normalizeGithubBookCoverUrl(book.imageUrl);
+            // Jika URL cover sudah tersimpan di Sheets, gunakan URL tersebut setelah
+            // dinormalisasi. Jika belum ada, langsung bentuk URL dari ID buku.
+            // Dengan begitu cover yang sudah berada di GitHub dapat tampil tanpa
+            // memerlukan edit manual pada Google Sheets.
+            if (stored) return stored;
+            if (id) {
+                return `${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(id))}`;
+            }
+            return '';
+        };
+
+        // Ketika file cover sudah ada di GitHub tetapi imageUrl lama masih menunjuk
+        // /covers/, fallback ini mencoba lokasi /cover/ yang benar. Jika cover benar-
+        // benar belum ada, elemen image disembunyikan dan placeholder mengambil alih.
+        window.__ykbutBookCoverError = function(img) {
+            if (!img) return;
+            const fallbackUrl = img.getAttribute('data-github-fallback') || '';
+            const attempted = img.getAttribute('data-github-fallback-used') === '1';
+            if (!attempted && fallbackUrl) {
+                img.setAttribute('data-github-fallback-used', '1');
+                img.src = fallbackUrl + (fallbackUrl.includes('?') ? '&' : '?') + 'v=' + Date.now();
+                return;
+            }
+            img.style.display = 'none';
+            const next = img.nextElementSibling;
+            if (next) next.classList.remove('hidden');
+        };
+
+        function openGithubCoverUpload() {
+            window.open(GITHUB_BOOK_COVER_CONFIG.uploadUrl, '_blank', 'noopener,noreferrer');
+        }
+        window.__ykbutGithubCoverPreview = window.__ykbutGithubCoverPreview || {};
 
         function isValidWebAppUrl(url) {
             return /^https:\/\/script\.google\.com\/macros\/s\/[^\s/]+\/exec(?:\?.*)?$/i.test(String(url || '').trim());
@@ -2114,8 +2180,8 @@
                 const totalStock = mockBooks.reduce((sum, b) => sum + Number(b.stock || 0), 0);
                 const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0);
                 const featured = mockBooks.filter(Boolean).slice(0, 6);
-                const imageHtml = (book, extra='') => book?.imageUrl
-                    ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title || 'Cover buku')}" class="v25-cover ${extra}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling?.classList.remove('hidden');">
+                const imageHtml = (book, extra='') => getBookCoverUrl(book)
+                    ? `<img src="${escapeHtml(getBookCoverUrl(book))}" data-github-fallback="${escapeHtml(`${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(book.id))}`)}" alt="${escapeHtml(book.title || 'Cover buku')}" class="v25-cover ${extra}" loading="lazy" onerror="window.__ykbutBookCoverError(this);">
                        <div class="v25-cover-placeholder hidden ${extra}"><i class="ph ph-book-open text-4xl"></i></div>`
                     : `<div class="v25-cover-placeholder ${extra}"><div class="text-center px-4"><i class="ph ph-book-open text-4xl mb-2 opacity-80"></i><div class="text-xs font-bold">YKBUT PRESS</div></div></div>`;
                 const cards = featured.map(book => `
@@ -3987,7 +4053,7 @@
                         <td class="py-3 px-4 text-sm font-medium text-gray-800">${book.id}</td>
                         <td class="py-3 px-4">
                             <div class="flex items-center gap-3">
-                                ${book.imageUrl ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)}" class="w-10 h-14 object-cover rounded-md border border-slate-200" loading="lazy">` : `<div class="w-10 h-14 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center"><i class="ph ph-book-open"></i></div>`}
+                                ${getBookCoverUrl(book) ? `<img src="${escapeHtml(getBookCoverUrl(book))}" data-github-fallback="${escapeHtml(`${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(book.id))}`)}" alt="${escapeHtml(book.title)}" class="w-10 h-14 object-cover rounded-md border border-slate-200" loading="lazy" onerror="window.__ykbutBookCoverError(this);">` : `<div class="w-10 h-14 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center"><i class="ph ph-book-open"></i></div>`}
                                 <div><p class="font-bold text-gray-800 text-sm">${book.title}</p>
                                     <p class="text-xs text-gray-500">${book.author} • ${book.pages} Hal</p></div>
                             </div>
@@ -4014,8 +4080,8 @@
 
                 const visualBooks = filteredBooks.slice(0, 10).map(book => `
                     <div class="v25-card bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        ${book.imageUrl ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)}" class="v25-cover" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling?.classList.remove('hidden');">` : ''}
-                        <div class="${book.imageUrl ? 'v25-cover-placeholder hidden' : 'v25-cover-placeholder'}"><i class="ph ph-book-open text-3xl"></i></div>
+                        ${getBookCoverUrl(book) ? `<img src="${escapeHtml(getBookCoverUrl(book))}" data-github-fallback="${escapeHtml(`${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(book.id))}`)}" alt="${escapeHtml(book.title)}" class="v25-cover" loading="lazy" onerror="window.__ykbutBookCoverError(this);">` : ''}
+                        <div class="${getBookCoverUrl(book) ? 'v25-cover-placeholder hidden' : 'v25-cover-placeholder'}"><i class="ph ph-book-open text-3xl"></i></div>
                         <div class="p-3.5">
                             <div class="text-[10px] uppercase tracking-wide font-extrabold text-blue-700">${escapeHtml(book.category || 'Buku')}</div>
                             <div class="font-black text-sm text-slate-800 mt-1 line-clamp-2">${escapeHtml(book.title)}</div>
@@ -4212,14 +4278,18 @@
                                 <div class="space-y-4 bg-white p-5 rounded-lg border border-gray-200">
                                     <h4 class="font-bold text-gray-700 border-b pb-2 mb-4 flex items-center"><i class="ph ph-image mr-2 text-corp-primary text-xl"></i> Cover Buku</h4>
                                     <div id="book-image-preview" class="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                                        ${book && book.imageUrl ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)}" class="w-full max-h-72 object-contain bg-white">` : `<div class="h-48 flex flex-col items-center justify-center text-slate-400"><i class="ph ph-image text-5xl"></i><span class="text-xs mt-2">Belum ada cover</span></div>`}
+                                        ${book && getBookCoverUrl(book) ? `<img src="${escapeHtml(getBookCoverUrl(book))}" data-github-fallback="${escapeHtml(`${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(githubBookCoverFileName(book.id))}`)}" alt="${escapeHtml(book.title)}" class="w-full max-h-72 object-contain bg-white" onerror="window.__ykbutBookCoverError(this);">` : `<div class="h-48 flex flex-col items-center justify-center text-slate-400"><i class="ph ph-image text-5xl"></i><span class="text-xs mt-2">Belum ada cover</span></div>`}
                                     </div>
                                     <div id="book-image-drop" class="v25-upload-drop rounded-xl p-5 text-center cursor-pointer">
                                         <input type="file" id="b-image" accept="image/png,image/jpeg,image/webp" class="hidden">
-                                        <button type="button" onclick="document.getElementById('b-image').click()" class="px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg font-semibold text-sm shadow-sm hover:bg-blue-50 transition"><i class="ph ph-upload-simple mr-2"></i>Pilih Gambar</button>
-                                        <p class="text-xs text-slate-500 mt-2">JPG, PNG, atau WebP • otomatis diperkecil agar ringan</p>
+                                        <div class="flex flex-wrap items-center justify-center gap-2">
+                                            <button type="button" onclick="document.getElementById('b-image').click()" class="px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg font-semibold text-sm shadow-sm hover:bg-blue-50 transition"><i class="ph ph-upload-simple mr-2"></i>Pilih Gambar</button>
+                                            <button type="button" id="btn-download-github-cover" class="hidden px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm shadow hover:bg-blue-700 transition"><i class="ph ph-download-simple mr-2"></i>Unduh untuk GitHub</button>
+                                            <button type="button" onclick="openGithubCoverUpload()" class="px-4 py-2 bg-slate-900 text-white rounded-lg font-semibold text-sm shadow hover:bg-slate-800 transition"><i class="ph ph-github-logo mr-2"></i>Buka GitHub</button>
+                                        </div>
+                                        <p class="text-xs text-slate-500 mt-3">JPG, PNG, atau WebP • otomatis diperkecil • simpan asset di folder <strong>/cover/</strong> GitHub Pages</p>
                                     </div>
-                                    <button type="button" id="btn-remove-book-image" class="${book && book.imageUrl ? '' : 'hidden'} text-xs font-semibold text-red-600 hover:underline"><i class="ph ph-trash mr-1"></i>Hapus cover</button>
+                                    <button type="button" id="btn-remove-book-image" class="${book && getBookCoverUrl(book) ? '' : 'hidden'} text-xs font-semibold text-red-600 hover:underline"><i class="ph ph-trash mr-1"></i>Hapus cover</button>
                                     <div id="book-image-status" class="text-xs text-slate-500"></div>
                                 </div>
 
@@ -4281,6 +4351,7 @@
                 const imagePreview = document.getElementById('book-image-preview');
                 const imageStatus = document.getElementById('book-image-status');
                 const removeImageBtn = document.getElementById('btn-remove-book-image');
+                const downloadGithubBtn = document.getElementById('btn-download-github-cover');
                 const applyPreview = (src) => {
                     if (!imagePreview) return;
                     imagePreview.innerHTML = `<img src="${src}" alt="Preview Cover" class="w-full max-h-72 object-contain bg-white">`;
@@ -4288,20 +4359,43 @@
                 };
                 const selectImage = (file) => {
                     if (!file || !String(file.type || '').startsWith('image/')) return;
+                    const allowed = ['image/jpeg','image/png','image/webp'];
+                    if (!allowed.includes(file.type)) {
+                        showToast('Format cover harus JPG, PNG, atau WebP.', 'error');
+                        return;
+                    }
+                    if (file.size > 8 * 1024 * 1024) {
+                        showToast('Ukuran gambar maksimal 8 MB.', 'error');
+                        return;
+                    }
                     window.__ykbutPendingBookImageFile = file;
                     window.__ykbutRemoveBookImage = false;
                     const reader = new FileReader();
-                    reader.onload = () => applyPreview(reader.result);
+                    reader.onload = () => {
+                        applyPreview(reader.result);
+                        if (downloadGithubBtn) downloadGithubBtn.classList.remove('hidden');
+                        if (imageStatus) imageStatus.innerHTML = `${escapeHtml(file.name)} siap. File GitHub akan dibuat sebagai <strong>${escapeHtml(githubBookCoverFileName(bookId || `B${String(mockBooks.length + 1).padStart(3,'0')}`))}</strong>.`;
+                    };
                     reader.readAsDataURL(file);
-                    if (imageStatus) imageStatus.innerText = `${file.name} siap diunggah saat Anda menekan Simpan.`;
                 };
                 imageInput?.addEventListener('change', e => selectImage(e.target.files?.[0]));
+                downloadGithubBtn?.addEventListener('click', async () => {
+                    const file = window.__ykbutPendingBookImageFile;
+                    if (!file) return showToast('Pilih cover terlebih dahulu.', 'info');
+                    try {
+                        const payload = await app.readAndCompressBookImage(file, bookId || `B${String(mockBooks.length + 1).padStart(3,'0')}`);
+                        app.downloadGithubBookCover(payload);
+                    } catch (err) {
+                        showToast('Gagal menyiapkan file cover: ' + String(err.message || err), 'error');
+                    }
+                });
                 imageDrop?.addEventListener('dragover', e => { e.preventDefault(); imageDrop.classList.add('dragover'); });
                 imageDrop?.addEventListener('dragleave', () => imageDrop.classList.remove('dragover'));
                 imageDrop?.addEventListener('drop', e => { e.preventDefault(); imageDrop.classList.remove('dragover'); selectImage(e.dataTransfer?.files?.[0]); });
                 removeImageBtn?.addEventListener('click', () => {
                     window.__ykbutPendingBookImageFile = null;
                     window.__ykbutRemoveBookImage = true;
+                    if (downloadGithubBtn) downloadGithubBtn.classList.add('hidden');
                     if (imagePreview) imagePreview.innerHTML = `<div class="h-48 flex flex-col items-center justify-center text-slate-400"><i class="ph ph-image text-5xl"></i><span class="text-xs mt-2">Cover akan dihapus</span></div>`;
                     if (imageStatus) imageStatus.innerText = 'Cover akan dihapus saat disimpan.';
                 });
@@ -4321,7 +4415,7 @@
                         costPrice: cost,
                         defaultPrice: price,
                         margin: price - cost,
-                        imageUrl: book?.imageUrl || '',
+                        imageUrl: getBookCoverUrl(book) || '',
                         imageDriveId: book?.imageDriveId || ''
                     };
 
@@ -4331,34 +4425,26 @@
 
                     try {
                         if (selectedFile) {
-                            if (statusEl) statusEl.innerText = 'Mengunggah cover ke server...';
-                            try {
-                                const uploadPayload = await app.readAndCompressBookImage(selectedFile, bookData.id);
-                                const uploadRes = await apiService.sendAction('uploadBookImage', {
-                                    id: bookData.id,
-                                    fileName: uploadPayload.fileName,
-                                    mimeType: uploadPayload.mimeType,
-                                    imageData: uploadPayload.imageData,
-                                    oldDriveId: book?.imageDriveId || ''
-                                });
-                                if (!uploadRes || uploadRes.status !== 'success') throw new Error(uploadRes?.message || 'Upload cover gagal.');
-                                bookData.imageUrl = uploadRes.imageUrl || '';
-                                bookData.imageDriveId = uploadRes.imageDriveId || '';
-                            } catch (imageErr) {
-                                console.warn('Cover upload belum tersedia:', imageErr);
-                                if (statusEl) statusEl.innerText = 'Cover belum terunggah. Data buku tetap akan disimpan.';
-                                showToast('Cover belum tersimpan di server. Pastikan Apps Script V13 sudah dideploy. Data buku tetap dilanjutkan.', 'info');
+                            if (statusEl) statusEl.innerText = 'Menyiapkan cover untuk GitHub Pages...';
+                            const payload = await app.readAndCompressBookImage(selectedFile, bookData.id);
+                            app.downloadGithubBookCover(payload);
+                            const version = Date.now();
+                            bookData.imageUrl = `${GITHUB_BOOK_COVER_CONFIG.pagesBaseUrl}${encodeURIComponent(payload.fileName)}?v=${version}`;
+                            bookData.imageDriveId = '';
+                            window.__ykbutGithubCoverPreview[String(bookData.id)] = payload.imageData;
+                            if (statusEl) statusEl.innerHTML = `Cover siap. File <strong>${escapeHtml(payload.fileName)}</strong> sudah diunduh. Upload file tersebut ke <strong>/cover/</strong> GitHub agar tampil permanen di semua perangkat.`;
+                        } else if (removeRequested) {
+                            if (bookData.imageDriveId) {
+                                try {
+                                    const delImage = await apiService.sendAction('deleteBookImage', { driveId: bookData.imageDriveId });
+                                    if (!delImage || delImage.status !== 'success') throw new Error(delImage?.message || 'Gagal menghapus cover lama.');
+                                } catch (imageErr) {
+                                    console.warn('Delete cover Drive belum tersedia:', imageErr);
+                                }
                             }
-                        } else if (removeRequested && bookData.imageDriveId) {
-                            try {
-                                const delImage = await apiService.sendAction('deleteBookImage', { driveId: bookData.imageDriveId });
-                                if (!delImage || delImage.status !== 'success') throw new Error(delImage?.message || 'Gagal menghapus cover.');
-                                bookData.imageUrl = '';
-                                bookData.imageDriveId = '';
-                            } catch (imageErr) {
-                                console.warn('Delete cover belum tersedia:', imageErr);
-                                showToast('Cover lama dipertahankan karena server gambar belum aktif.', 'info');
-                            }
+                            bookData.imageUrl = '';
+                            bookData.imageDriveId = '';
+                            delete window.__ykbutGithubCoverPreview[String(bookData.id)];
                         }
 
                         if (isEdit) {
@@ -4381,6 +4467,18 @@
                         window.__ykbutRemoveBookImage = false;
                     }
                 });
+            },
+
+            downloadGithubBookCover(payload) {
+                if (!payload?.imageData || !payload?.fileName) return;
+                const a = document.createElement('a');
+                a.href = payload.imageData;
+                a.download = payload.fileName;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                showToast(`Cover ${payload.fileName} siap di-upload ke GitHub /cover.`, 'success');
             },
 
             async readAndCompressBookImage(file, bookId) {
