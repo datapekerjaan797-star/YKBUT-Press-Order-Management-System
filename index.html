@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YKBUT Press Order Management System V24</title>
+    <title>YKBUT Press Order Management System V26 • Futuristic UI</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -532,9 +532,384 @@
                 height: 215px;
             }
         }
-    </style>
+    
+
+        /* V25 Modern UI */
+        .v25-hero {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0f172a 0%, #173b7a 52%, #1d4ed8 100%);
+        }
+        .v25-hero::before,
+        .v25-hero::after {
+            content: '';
+            position: absolute;
+            border-radius: 9999px;
+            filter: blur(1px);
+            opacity: .18;
+            pointer-events: none;
+        }
+        .v25-hero::before { width: 300px; height: 300px; background: #facc15; right: -90px; top: -120px; }
+        .v25-hero::after { width: 220px; height: 220px; background: #60a5fa; left: -80px; bottom: -120px; }
+        .v25-glass { background: rgba(255,255,255,.10); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,.16); }
+        .v25-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+        .v25-card:hover { transform: translateY(-3px); box-shadow: 0 16px 32px rgba(15,23,42,.10); border-color: rgba(29,78,216,.18); }
+        .v25-cover {
+            aspect-ratio: 3 / 4;
+            width: 100%;
+            object-fit: cover;
+            background: linear-gradient(135deg, #dbeafe, #eff6ff);
+        }
+        .v25-cover-placeholder {
+            aspect-ratio: 3 / 4;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 70%, #60a5fa 100%);
+            color: white;
+        }
+        .v25-upload-drop {
+            border: 1.5px dashed #93c5fd;
+            background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+            transition: .2s ease;
+        }
+        .v25-upload-drop.dragover { border-color: #1d4ed8; background: #dbeafe; transform: scale(1.01); }
+        .v25-section-label { letter-spacing: .08em; text-transform: uppercase; font-size: 10px; font-weight: 800; color: #64748b; }
+
+
+        /* =========================================================
+         * V26 FUTURISTIC UI LAYER
+         * Visual-only enhancement: no business logic or data flow changed.
+         * ========================================================= */
+        @media screen {
+            :root {
+                --v26-navy: #07111f;
+                --v26-navy-2: #0b1e35;
+                --v26-blue: #2563eb;
+                --v26-cyan: #22d3ee;
+                --v26-sky: #60a5fa;
+                --v26-violet: #8b5cf6;
+                --v26-line: rgba(37, 99, 235, .16);
+                --v26-glass: rgba(255,255,255,.72);
+            }
+
+            html { scroll-behavior: smooth; }
+            body.v26-body { background:
+                radial-gradient(circle at 10% 10%, rgba(37,99,235,.07), transparent 28%),
+                radial-gradient(circle at 92% 8%, rgba(34,211,238,.06), transparent 24%),
+                linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+            }
+
+            .v26-body::before {
+                content: '';
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 0;
+                opacity: .22;
+                background-image:
+                    linear-gradient(rgba(37,99,235,.045) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(37,99,235,.045) 1px, transparent 1px);
+                background-size: 36px 36px;
+                mask-image: linear-gradient(to bottom, rgba(0,0,0,.72), transparent 80%);
+            }
+
+            .v26-sidebar {
+                position: relative;
+                background:
+                    radial-gradient(circle at 25% 8%, rgba(34,211,238,.14), transparent 22%),
+                    radial-gradient(circle at 90% 80%, rgba(37,99,235,.22), transparent 28%),
+                    linear-gradient(160deg, #050b15 0%, #0b1627 55%, #071525 100%) !important;
+                border-right: 1px solid rgba(96,165,250,.12);
+                box-shadow: 18px 0 40px rgba(2,8,23,.18);
+                isolation: isolate;
+            }
+            .v26-sidebar::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                opacity: .17;
+                background:
+                    linear-gradient(115deg, transparent 0 36%, rgba(34,211,238,.11) 36% 37%, transparent 37% 64%, rgba(96,165,250,.10) 64% 65%, transparent 65%),
+                    repeating-linear-gradient(180deg, transparent 0 32px, rgba(255,255,255,.018) 32px 33px);
+                z-index: -1;
+            }
+            .v26-sidebar > * { position: relative; z-index: 1; }
+            .v26-sidebar .border-gray-800 { border-color: rgba(148,163,184,.11) !important; }
+            .v26-sidebar img {
+                filter: drop-shadow(0 0 16px rgba(37,99,235,.30));
+                transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .45s ease;
+            }
+            .v26-sidebar img:hover { transform: translateY(-2px) scale(1.03); filter: drop-shadow(0 0 22px rgba(34,211,238,.38)); }
+
+            .v26-nav button {
+                position: relative;
+                overflow: hidden;
+                border: 1px solid transparent;
+                transition: transform .18s ease, background .24s ease, border-color .24s ease, box-shadow .24s ease, color .24s ease !important;
+            }
+            .v26-nav button::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 14%;
+                bottom: 14%;
+                width: 3px;
+                border-radius: 999px;
+                background: linear-gradient(180deg, var(--v26-cyan), var(--v26-blue));
+                opacity: 0;
+                transform: scaleY(.2);
+                transition: opacity .24s ease, transform .24s ease;
+            }
+            .v26-nav button:hover {
+                transform: translateX(2px);
+                background: rgba(37,99,235,.15) !important;
+                border-color: rgba(96,165,250,.12) !important;
+                box-shadow: inset 0 0 22px rgba(37,99,235,.06);
+            }
+            .v26-nav button.bg-corp-primary,
+            .v26-nav button[aria-current="page"] {
+                background: linear-gradient(135deg, rgba(37,99,235,.98), rgba(29,78,216,.88)) !important;
+                border-color: rgba(96,165,250,.42) !important;
+                box-shadow: 0 8px 26px rgba(37,99,235,.22), inset 0 0 24px rgba(255,255,255,.08);
+            }
+            .v26-nav button.bg-corp-primary::before,
+            .v26-nav button[aria-current="page"]::before { opacity: 1; transform: scaleY(1); }
+
+            .v26-header {
+                position: relative;
+                background: rgba(255,255,255,.84) !important;
+                backdrop-filter: blur(18px);
+                -webkit-backdrop-filter: blur(18px);
+                border-bottom-color: transparent !important;
+                box-shadow: 0 10px 30px rgba(15,23,42,.08);
+            }
+            .v26-header::after {
+                content: '';
+                position: absolute;
+                left: 0; right: 0; bottom: -1px;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, var(--v26-blue) 20%, var(--v26-cyan) 50%, var(--v26-violet) 80%, transparent);
+                background-size: 200% 100%;
+                animation: v26Flow 7s linear infinite;
+            }
+            .v26-header h2 { letter-spacing: -.02em; }
+            .v26-header-actions > button {
+                box-shadow: 0 5px 16px rgba(15,23,42,.05);
+            }
+
+            #app-content.v26-main,
+            .v26-main {
+                position: relative;
+                z-index: 1;
+                background:
+                    radial-gradient(circle at 82% 7%, rgba(34,211,238,.055), transparent 18%),
+                    radial-gradient(circle at 10% 30%, rgba(37,99,235,.045), transparent 20%),
+                    linear-gradient(180deg, rgba(248,250,252,.74), rgba(241,245,249,.96)) !important;
+            }
+
+            .v26-main .bg-white,
+            .v26-main .v25-card {
+                box-shadow: 0 10px 30px rgba(15,23,42,.05);
+            }
+            .v26-main .rounded-xl,
+            .v26-main .rounded-2xl,
+            .v26-main .rounded-3xl {
+                border-color: rgba(148,163,184,.22) !important;
+            }
+            .v26-main .bg-white:hover {
+                box-shadow: 0 16px 40px rgba(15,23,42,.07);
+            }
+
+            /* Dashboard KPI cards */
+            .v26-main .border-l-4.rounded-xl {
+                position: relative;
+                overflow: hidden;
+                transition: transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s ease, border-color .22s ease;
+            }
+            .v26-main .border-l-4.rounded-xl::after {
+                content: '';
+                position: absolute;
+                width: 120px;
+                height: 120px;
+                right: -44px;
+                top: -50px;
+                border-radius: 50%;
+                background: radial-gradient(circle, rgba(96,165,250,.14), transparent 62%);
+                pointer-events: none;
+            }
+            .v26-main .border-l-4.rounded-xl:hover {
+                transform: translateY(-4px) scale(1.006);
+                box-shadow: 0 18px 42px rgba(15,23,42,.11);
+            }
+
+            /* Modernize inputs without changing semantics */
+            .v26-main input,
+            .v26-main select,
+            .v26-main textarea {
+                transition: border-color .2s ease, box-shadow .2s ease, background .2s ease, transform .15s ease;
+            }
+            .v26-main input:focus,
+            .v26-main select:focus,
+            .v26-main textarea:focus {
+                box-shadow: 0 0 0 4px rgba(37,99,235,.10), 0 0 24px rgba(34,211,238,.05);
+                transform: translateY(-1px);
+            }
+
+            /* Futuristic hero */
+            .v26-hero-shell {
+                min-height: 315px;
+                background:
+                    radial-gradient(circle at 78% 20%, rgba(34,211,238,.17), transparent 16%),
+                    radial-gradient(circle at 90% 80%, rgba(139,92,246,.14), transparent 20%),
+                    linear-gradient(135deg, #050b16 0%, #0b1d33 45%, #10377d 100%) !important;
+                border: 1px solid rgba(96,165,250,.20) !important;
+                box-shadow: 0 22px 70px rgba(15,23,42,.22), inset 0 0 60px rgba(37,99,235,.07);
+            }
+            .v26-hero-shell::before {
+                width: 520px !important;
+                height: 520px !important;
+                right: -180px !important;
+                top: -220px !important;
+                background: radial-gradient(circle, rgba(34,211,238,.20), transparent 62%) !important;
+                filter: blur(0) !important;
+                animation: v26Float 8s ease-in-out infinite;
+            }
+            .v26-hero-shell::after {
+                width: 420px !important;
+                height: 420px !important;
+                left: -200px !important;
+                bottom: -220px !important;
+                background: radial-gradient(circle, rgba(139,92,246,.17), transparent 62%) !important;
+                filter: blur(0) !important;
+                animation: v26Float 10s ease-in-out infinite reverse;
+            }
+            .v26-hero-shell {
+                isolation: isolate;
+                overflow: hidden;
+            }
+            .v26-hero-shell > .relative { z-index: 3; }
+            .v26-hero-shell .v25-glass {
+                background: linear-gradient(145deg, rgba(255,255,255,.12), rgba(255,255,255,.05)) !important;
+                border: 1px solid rgba(255,255,255,.16) !important;
+                box-shadow: inset 0 0 18px rgba(255,255,255,.035), 0 8px 26px rgba(0,0,0,.10);
+                transition: transform .25s ease, background .25s ease, border-color .25s ease;
+            }
+            .v26-hero-shell .v25-glass:hover { transform: translateY(-3px); border-color: rgba(96,165,250,.38) !important; background: rgba(255,255,255,.14) !important; }
+            .v26-hero-shell::marker { display:none; }
+
+            /* Book cards / catalog */
+            .v25-card {
+                position: relative;
+                border-color: rgba(148,163,184,.24) !important;
+                background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.98));
+                transition: transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s ease, border-color .28s ease;
+            }
+            .v25-card::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                border-radius: inherit;
+                pointer-events: none;
+                opacity: 0;
+                background: linear-gradient(120deg, transparent 10%, rgba(255,255,255,.75) 44%, transparent 78%);
+                transform: translateX(-120%);
+                transition: opacity .25s ease;
+            }
+            .v25-card:hover { transform: translateY(-6px); box-shadow: 0 22px 48px rgba(15,23,42,.12); border-color: rgba(37,99,235,.26) !important; }
+            .v25-card:hover::after { opacity: .75; animation: v26Shimmer 1.15s ease; }
+            .v25-cover, .v25-cover-placeholder { transition: transform .35s ease, filter .35s ease; }
+            .v25-card:hover .v25-cover, .v25-card:hover .v25-cover-placeholder { transform: scale(1.025); filter: saturate(1.06); }
+
+            .v25-upload-drop {
+                box-shadow: inset 0 0 20px rgba(37,99,235,.03);
+                transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+            }
+            .v25-upload-drop:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(37,99,235,.08); }
+            .v25-upload-drop.dragover { box-shadow: 0 0 0 5px rgba(37,99,235,.08), 0 16px 34px rgba(37,99,235,.10); }
+
+            /* Interactive states */
+            button, [onclick], .v25-card { -webkit-tap-highlight-color: transparent; }
+            button:active, [onclick]:active { transform: scale(.982); }
+            button { transition: transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease !important; }
+            button:hover { filter: saturate(1.05); }
+
+            .v26-click-ripple {
+                position: absolute;
+                width: 12px;
+                height: 12px;
+                margin-left: -6px;
+                margin-top: -6px;
+                border-radius: 9999px;
+                background: radial-gradient(circle, rgba(255,255,255,.55) 0%, rgba(96,165,250,.22) 42%, transparent 72%);
+                transform: scale(0);
+                pointer-events: none;
+                animation: v26Ripple .62s ease-out forwards;
+                z-index: 50;
+            }
+
+            .v26-click-glow {
+                animation: v26ClickGlow .32s ease-out;
+            }
+
+            /* Modal / toast polish */
+            #modal-root > div.fixed.inset-0 {
+                animation: v26Backdrop .24s ease-out;
+                backdrop-filter: blur(7px);
+            }
+            #modal-root > div.fixed.inset-0 > div {
+                animation: v26ModalIn .30s cubic-bezier(.2,.8,.2,1);
+                box-shadow: 0 24px 70px rgba(2,8,23,.22) !important;
+            }
+            #toast-container > div {
+                animation: v26ToastIn .34s cubic-bezier(.2,.8,.2,1);
+                backdrop-filter: blur(10px);
+            }
+
+            .fade-in {
+                animation: v26PageIn .38s cubic-bezier(.2,.8,.2,1);
+            }
+
+            #sync-status-badge {
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 6px 20px rgba(15,23,42,.06);
+            }
+            #sync-status-badge::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,.45) 50%, transparent 75%);
+                transform: translateX(-120%);
+                animation: v26Shimmer 4.5s ease-in-out infinite;
+                pointer-events: none;
+            }
+
+            @keyframes v26PageIn { from { opacity:0; transform: translateY(12px) scale(.992); filter: blur(5px); } to { opacity:1; transform:none; filter: blur(0); } }
+            @keyframes v26ModalIn { from { opacity:0; transform: translateY(16px) scale(.97); } to { opacity:1; transform:none; } }
+            @keyframes v26Backdrop { from { opacity:0; } to { opacity:1; } }
+            @keyframes v26ToastIn { from { opacity:0; transform: translateX(18px) scale(.97); } to { opacity:1; transform:none; } }
+            @keyframes v26Ripple { from { transform:scale(0); opacity:.8; } to { transform:scale(18); opacity:0; } }
+            @keyframes v26ClickGlow { 0% { box-shadow:0 0 0 rgba(34,211,238,0); } 45% { box-shadow:0 0 0 5px rgba(34,211,238,.08), 0 0 32px rgba(37,99,235,.16); } 100% { box-shadow:0 0 0 rgba(34,211,238,0); } }
+            @keyframes v26Shimmer { 0% { transform:translateX(-120%); } 100% { transform:translateX(120%); } }
+            @keyframes v26Float { 0%,100% { transform:translate3d(0,0,0); } 50% { transform:translate3d(-10px,8px,0) scale(1.03); } }
+            @keyframes v26Flow { 0% { background-position:0% 50%; } 100% { background-position:200% 50%; } }
+
+            @media (prefers-reduced-motion: reduce) {
+                *, *::before, *::after {
+                    animation-duration: .01ms !important;
+                    animation-iteration-count: 1 !important;
+                    transition-duration: .01ms !important;
+                    scroll-behavior: auto !important;
+                }
+            }
+        }
+
+</style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans h-screen flex overflow-hidden relative">
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex overflow-hidden relative v26-body">
 
     <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2 pointer-events-none"></div>
 
@@ -545,7 +920,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -576,18 +951,21 @@
         </div>
     </div>
 
-    <aside class="w-64 bg-corp-dark text-white flex flex-col shadow-2xl z-20 transition-all duration-300">
+    <aside class="w-64 bg-corp-dark text-white flex flex-col shadow-2xl z-20 transition-all duration-300 v26-sidebar">
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
             </div>
         </div>
 
-        <nav class="flex-1 px-4 py-6 space-y-2">
+        <nav class="flex-1 px-4 py-6 space-y-2 v26-nav">
+            <button onclick="app.navigate('home')" id="nav-home" class="w-full flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg font-medium transition-colors">
+                <i class="ph ph-house text-xl mr-3"></i> Beranda
+            </button>
             <button onclick="app.navigate('dashboard')" id="nav-dashboard" class="w-full flex items-center px-4 py-3 bg-corp-primary text-white rounded-lg font-semibold transition-colors">
                 <i class="ph ph-squares-four text-xl mr-3"></i> Dashboard
             </button>
@@ -621,7 +999,7 @@
     <div id="mobile-sidebar-overlay" onclick="app.closeMobileSidebar()" aria-hidden="true"></div>
 
     <div class="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header class="h-20 bg-white border-b-4 border-corp-primary shadow-sm flex items-center justify-between px-8 z-10">
+        <header class="h-20 bg-white border-b-4 border-corp-primary shadow-sm flex items-center justify-between px-8 z-10 v26-header">
             <div class="flex items-center space-x-4">
                 <button id="mobile-menu-toggle" type="button" onclick="app.toggleMobileSidebar()" aria-label="Buka menu navigasi" title="Menu navigasi">
                     <i class="ph ph-list"></i>
@@ -636,7 +1014,7 @@
                 </button>
             </div>
             
-            <div class="flex items-center space-x-3 header-actions">
+            <div class="flex items-center space-x-3 header-actions v26-header-actions">
                 <button onclick="app.openSheetConfigModal()" class="px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-corp-primary rounded-lg flex items-center transition border border-blue-200">
                     <i class="ph ph-wrench text-base mr-1.5"></i> Setup &amp; Diagnosa Sheets
                 </button>
@@ -650,7 +1028,7 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-8" id="app-content">
+        <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-8 v26-main" id="app-content">
         </main>
     </div>
 
@@ -686,7 +1064,7 @@
         }
 
         const SYNC_ENGINE_VERSION = 'V24_SERVER_AUTHORITATIVE_STATUS_EDIT_BACKWARD_COMPAT';
-        const SUPPORTED_SERVER_VERSIONS = new Set(['YKBUT-PRESS-SERVER-V10','YKBUT-PRESS-SERVER-V11','YKBUT-PRESS-SERVER-V12']);
+        const SUPPORTED_SERVER_VERSIONS = new Set(['YKBUT-PRESS-SERVER-V13','YKBUT-PRESS-SERVER-V12','YKBUT-PRESS-SERVER-V11','YKBUT-PRESS-SERVER-V10']);
         const FINGERPRINT_EXCLUDED_KEYS = new Set(['isNewOrder','isNewCustomer','pendingDisplayNo','localChangedAt']);
 
         const canonicalizeOrderForFingerprint = (order) => {
@@ -1547,7 +1925,7 @@
 
             navigate(view, param = null) {
                 this.closeMobileSidebar();
-                if (currentUser && currentUser.role === 'Viewer' && !['dashboard', 'orders'].includes(view)) {
+                if (currentUser && currentUser.role === 'Viewer' && !['home', 'dashboard', 'orders'].includes(view)) {
                     view = 'dashboard';
                 }
                 this.currentView = (view === 'add-book' || view === 'edit-book') ? 'books' : view;
@@ -1569,6 +1947,13 @@
                 }
 
                 switch(view) {
+                    case 'home':
+                        titleElement.innerText = "Beranda YKBUT Press";
+                        titleElement.className = "text-xl font-bold text-gray-800";
+                        titleElement.onclick = null;
+                        titleElement.removeAttribute('title');
+                        this.renderLandingPage(contentDiv);
+                        break;
                     case 'dashboard':
                         titleElement.innerText = "Dashboard Analitik";
                         titleElement.className = "text-xl font-bold text-gray-800 cursor-pointer hover:text-corp-primary transition";
@@ -1621,7 +2006,7 @@
             },
 
             updateNavStyle() {
-                const navs = ['dashboard', 'orders', 'add-order', 'books', 'users'];
+                const navs = ['home', 'dashboard', 'orders', 'add-order', 'books', 'users'];
                 navs.forEach(nav => {
                     const btn = document.getElementById(`nav-${nav}`);
                     if(!btn) return;
@@ -1719,6 +2104,68 @@
                             <div class="p-5 overflow-y-auto">${summary}${body}</div>
                             <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end shrink-0"><button onclick="app.closeModal()" class="px-4 py-2 bg-corp-primary text-white font-semibold rounded-lg hover:bg-blue-800 transition shadow">Tutup</button></div>
                         </div>
+                    </div>`;
+            },
+
+            renderLandingPage(container) {
+                const orders = this.getDashboardOrders();
+                const totalOrders = orders.length;
+                const totalBooks = mockBooks.length;
+                const totalStock = mockBooks.reduce((sum, b) => sum + Number(b.stock || 0), 0);
+                const totalRevenue = orders.reduce((sum, o) => sum + Number(o.totalPrice || 0), 0);
+                const featured = mockBooks.filter(Boolean).slice(0, 6);
+                const imageHtml = (book, extra='') => book?.imageUrl
+                    ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title || 'Cover buku')}" class="v25-cover ${extra}" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling?.classList.remove('hidden');">
+                       <div class="v25-cover-placeholder hidden ${extra}"><i class="ph ph-book-open text-4xl"></i></div>`
+                    : `<div class="v25-cover-placeholder ${extra}"><div class="text-center px-4"><i class="ph ph-book-open text-4xl mb-2 opacity-80"></i><div class="text-xs font-bold">YKBUT PRESS</div></div></div>`;
+                const cards = featured.map(book => `
+                    <div class="v25-card bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm cursor-pointer" onclick="app.navigate('books')">
+                        ${imageHtml(book)}
+                        <div class="p-4">
+                            <p class="font-bold text-slate-800 text-sm line-clamp-2">${escapeHtml(book.title)}</p>
+                            <p class="text-xs text-slate-500 mt-1">${escapeHtml(book.author || 'YKBUT Press')}</p>
+                            <div class="mt-3 flex items-center justify-between gap-2">
+                                <span class="text-xs font-semibold text-blue-700">${formatRupiah(book.defaultPrice || 0)}</span>
+                                <span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-600">Stok ${Number(book.stock || 0)}</span>
+                            </div>
+                        </div>
+                    </div>`).join('');
+
+                container.innerHTML = `
+                    <div class="fade-in space-y-6">
+                        <section class="v25-hero v26-hero-shell rounded-3xl p-7 md:p-10 text-white shadow-xl">
+                            <div class="relative z-10 grid grid-cols-1 lg:grid-cols-[1.4fr_.6fr] gap-8 items-end">
+                                <div>
+                                    <div class="v25-section-label text-blue-100 mb-3">YKBUT PRESS • DIGITAL CATALOG</div>
+                                    <h1 class="text-3xl md:text-5xl font-black tracking-tight leading-tight">Kelola buku, pesanan, dan katalog dalam satu ekosistem.</h1>
+                                    <p class="mt-4 text-blue-100 max-w-2xl text-sm md:text-base leading-relaxed">Tampilan baru yang lebih visual, dinamis, dan siap menampilkan cover buku tanpa mengubah alur kerja sistem yang sudah berjalan.</p>
+                                    <div class="mt-6 flex flex-wrap gap-3">
+                                        <button onclick="app.navigate('books')" class="px-4 py-2.5 rounded-xl bg-white text-slate-900 font-bold text-sm shadow-sm hover:bg-slate-100 transition flex items-center"><i class="ph ph-books mr-2"></i>Lihat Katalog</button>
+                                        ${currentUser && currentUser.role !== 'Viewer' ? `<button onclick="app.navigate('add-book')" class="px-4 py-2.5 rounded-xl v25-glass font-bold text-sm hover:bg-white/15 transition flex items-center"><i class="ph ph-plus-circle mr-2"></i>Tambah Buku</button>` : ''}
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="v25-glass rounded-2xl p-4"><div class="text-2xl font-black">${totalBooks}</div><div class="text-xs text-blue-100 mt-1">Judul Buku</div></div>
+                                    <div class="v25-glass rounded-2xl p-4"><div class="text-2xl font-black">${totalStock}</div><div class="text-xs text-blue-100 mt-1">Stok Buku</div></div>
+                                    <div class="v25-glass rounded-2xl p-4"><div class="text-2xl font-black">${totalOrders}</div><div class="text-xs text-blue-100 mt-1">Transaksi</div></div>
+                                    <div class="v25-glass rounded-2xl p-4"><div class="text-xl font-black">${formatRupiah(totalRevenue)}</div><div class="text-xs text-blue-100 mt-1">Omset</div></div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+                            <div class="flex items-center justify-between gap-4 mb-5">
+                                <div><div class="v25-section-label">Visual Catalog</div><h2 class="text-xl font-black text-slate-800 mt-1">Koleksi Buku</h2></div>
+                                <button onclick="app.navigate('books')" class="text-sm font-bold text-blue-700 hover:text-blue-900">Lihat semua <i class="ph ph-arrow-right ml-1"></i></button>
+                            </div>
+                            ${featured.length ? `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">${cards}</div>` : `<div class="py-12 text-center text-slate-500"><i class="ph ph-book-open text-5xl opacity-30"></i><p class="mt-3">Belum ada buku pada katalog.</p></div>`}
+                        </section>
+
+                        <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button onclick="app.navigate('orders')" class="v25-card text-left bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"><div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center"><i class="ph ph-shopping-cart-simple text-xl"></i></div><h3 class="font-black text-slate-800 mt-4">Kelola Pesanan</h3><p class="text-xs text-slate-500 mt-1">Pantau status, pembayaran, ongkir, dan cetak thermal.</p></button>
+                            <button onclick="app.navigate('dashboard')" class="v25-card text-left bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"><div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center"><i class="ph ph-chart-line-up text-xl"></i></div><h3 class="font-black text-slate-800 mt-4">Analitik</h3><p class="text-xs text-slate-500 mt-1">Lihat omset, biaya, profit, dan distribusi transaksi.</p></button>
+                            <button onclick="app.navigate('add-order')" class="v25-card text-left bg-white rounded-2xl border border-slate-200 p-5 shadow-sm"><div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center"><i class="ph ph-notepad text-xl"></i></div><h3 class="font-black text-slate-800 mt-4">Pesanan Baru</h3><p class="text-xs text-slate-500 mt-1">Input transaksi baru dengan customer ID dan loyalty point.</p></button>
+                        </section>
                     </div>`;
             },
 
@@ -2029,6 +2476,7 @@
                         </td>
                     </tr>
                 `}).join('');
+
 
                 container.innerHTML = `
                     <div class="fade-in bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -3538,8 +3986,11 @@
                         </td>
                         <td class="py-3 px-4 text-sm font-medium text-gray-800">${book.id}</td>
                         <td class="py-3 px-4">
-                            <p class="font-bold text-gray-800 text-sm">${book.title}</p>
-                            <p class="text-xs text-gray-500">${book.author} • ${book.pages} Hal</p>
+                            <div class="flex items-center gap-3">
+                                ${book.imageUrl ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)}" class="w-10 h-14 object-cover rounded-md border border-slate-200" loading="lazy">` : `<div class="w-10 h-14 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center"><i class="ph ph-book-open"></i></div>`}
+                                <div><p class="font-bold text-gray-800 text-sm">${book.title}</p>
+                                    <p class="text-xs text-gray-500">${book.author} • ${book.pages} Hal</p></div>
+                            </div>
                         </td>
                         <td class="py-3 px-4 text-sm text-gray-600"><span class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-xs font-medium border border-blue-100">${book.category}</span></td>
                         <td class="py-3 px-4 text-sm">
@@ -3561,6 +4012,18 @@
                     </tr>
                 `}).join('');
 
+                const visualBooks = filteredBooks.slice(0, 10).map(book => `
+                    <div class="v25-card bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                        ${book.imageUrl ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)}" class="v25-cover" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling?.classList.remove('hidden');">` : ''}
+                        <div class="${book.imageUrl ? 'v25-cover-placeholder hidden' : 'v25-cover-placeholder'}"><i class="ph ph-book-open text-3xl"></i></div>
+                        <div class="p-3.5">
+                            <div class="text-[10px] uppercase tracking-wide font-extrabold text-blue-700">${escapeHtml(book.category || 'Buku')}</div>
+                            <div class="font-black text-sm text-slate-800 mt-1 line-clamp-2">${escapeHtml(book.title)}</div>
+                            <div class="text-xs text-slate-500 mt-1 line-clamp-1">${escapeHtml(book.author || '-')}</div>
+                            <div class="mt-3 flex items-center justify-between gap-2"><span class="font-bold text-blue-700 text-sm">${formatRupiah(book.defaultPrice || 0)}</span><span class="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-600">Stok ${Number(book.stock || 0)}</span></div>
+                        </div>
+                    </div>`).join('');
+
                 container.innerHTML = `
                     <div class="fade-in bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                         <div class="p-6 border-b flex justify-between items-center bg-gray-50 flex-wrap gap-4">
@@ -3580,6 +4043,10 @@
                                     <i class="ph ph-plus-circle mr-2 text-lg"></i> Tambah Buku Baru
                                 </button>
                             </div>
+                        </div>
+                        <div class="px-6 pt-6">
+                            <div class="v25-section-label mb-1">Catalog Preview</div>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">${visualBooks || '<div class="col-span-full text-sm text-slate-500 py-6 text-center">Belum ada buku untuk ditampilkan.</div>'}</div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
@@ -3743,6 +4210,20 @@
                                 </div>
 
                                 <div class="space-y-4 bg-white p-5 rounded-lg border border-gray-200">
+                                    <h4 class="font-bold text-gray-700 border-b pb-2 mb-4 flex items-center"><i class="ph ph-image mr-2 text-corp-primary text-xl"></i> Cover Buku</h4>
+                                    <div id="book-image-preview" class="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                                        ${book && book.imageUrl ? `<img src="${escapeHtml(book.imageUrl)}" alt="${escapeHtml(book.title)}" class="w-full max-h-72 object-contain bg-white">` : `<div class="h-48 flex flex-col items-center justify-center text-slate-400"><i class="ph ph-image text-5xl"></i><span class="text-xs mt-2">Belum ada cover</span></div>`}
+                                    </div>
+                                    <div id="book-image-drop" class="v25-upload-drop rounded-xl p-5 text-center cursor-pointer">
+                                        <input type="file" id="b-image" accept="image/png,image/jpeg,image/webp" class="hidden">
+                                        <button type="button" onclick="document.getElementById('b-image').click()" class="px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg font-semibold text-sm shadow-sm hover:bg-blue-50 transition"><i class="ph ph-upload-simple mr-2"></i>Pilih Gambar</button>
+                                        <p class="text-xs text-slate-500 mt-2">JPG, PNG, atau WebP • otomatis diperkecil agar ringan</p>
+                                    </div>
+                                    <button type="button" id="btn-remove-book-image" class="${book && book.imageUrl ? '' : 'hidden'} text-xs font-semibold text-red-600 hover:underline"><i class="ph ph-trash mr-1"></i>Hapus cover</button>
+                                    <div id="book-image-status" class="text-xs text-slate-500"></div>
+                                </div>
+
+                                <div class="space-y-4 bg-white p-5 rounded-lg border border-gray-200">
                                     <h4 class="font-bold text-gray-700 border-b pb-2 mb-4 flex items-center"><i class="ph ph-currency-circle-dollar mr-2 text-corp-primary text-xl"></i> Harga & Margin</h4>
                                     
                                     <div>
@@ -3793,6 +4274,38 @@
                 costInput.addEventListener('input', calcMargin);
                 priceInput.addEventListener('input', calcMargin);
 
+                window.__ykbutPendingBookImageFile = null;
+                window.__ykbutRemoveBookImage = false;
+                const imageInput = document.getElementById('b-image');
+                const imageDrop = document.getElementById('book-image-drop');
+                const imagePreview = document.getElementById('book-image-preview');
+                const imageStatus = document.getElementById('book-image-status');
+                const removeImageBtn = document.getElementById('btn-remove-book-image');
+                const applyPreview = (src) => {
+                    if (!imagePreview) return;
+                    imagePreview.innerHTML = `<img src="${src}" alt="Preview Cover" class="w-full max-h-72 object-contain bg-white">`;
+                    if (removeImageBtn) removeImageBtn.classList.remove('hidden');
+                };
+                const selectImage = (file) => {
+                    if (!file || !String(file.type || '').startsWith('image/')) return;
+                    window.__ykbutPendingBookImageFile = file;
+                    window.__ykbutRemoveBookImage = false;
+                    const reader = new FileReader();
+                    reader.onload = () => applyPreview(reader.result);
+                    reader.readAsDataURL(file);
+                    if (imageStatus) imageStatus.innerText = `${file.name} siap diunggah saat Anda menekan Simpan.`;
+                };
+                imageInput?.addEventListener('change', e => selectImage(e.target.files?.[0]));
+                imageDrop?.addEventListener('dragover', e => { e.preventDefault(); imageDrop.classList.add('dragover'); });
+                imageDrop?.addEventListener('dragleave', () => imageDrop.classList.remove('dragover'));
+                imageDrop?.addEventListener('drop', e => { e.preventDefault(); imageDrop.classList.remove('dragover'); selectImage(e.dataTransfer?.files?.[0]); });
+                removeImageBtn?.addEventListener('click', () => {
+                    window.__ykbutPendingBookImageFile = null;
+                    window.__ykbutRemoveBookImage = true;
+                    if (imagePreview) imagePreview.innerHTML = `<div class="h-48 flex flex-col items-center justify-center text-slate-400"><i class="ph ph-image text-5xl"></i><span class="text-xs mt-2">Cover akan dihapus</span></div>`;
+                    if (imageStatus) imageStatus.innerText = 'Cover akan dihapus saat disimpan.';
+                });
+
                 document.getElementById('form-book').addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const cost = parseFloat(costInput.value) || 0;
@@ -3807,23 +4320,99 @@
                         stock: parseInt(document.getElementById('b-stock').value) || 0,
                         costPrice: cost,
                         defaultPrice: price,
-                        margin: price - cost
+                        margin: price - cost,
+                        imageUrl: book?.imageUrl || '',
+                        imageDriveId: book?.imageDriveId || ''
                     };
 
-                    if(isEdit) {
-                        const idx = mockBooks.findIndex(b => b.id === bookId);
-                        mockBooks[idx] = bookData;
-                    } else {
-                        mockBooks.push(bookData);
+                    const statusEl = document.getElementById('book-image-status');
+                    const removeRequested = Boolean(window.__ykbutRemoveBookImage);
+                    const selectedFile = window.__ykbutPendingBookImageFile || null;
+
+                    try {
+                        if (selectedFile) {
+                            if (statusEl) statusEl.innerText = 'Mengunggah cover ke server...';
+                            try {
+                                const uploadPayload = await app.readAndCompressBookImage(selectedFile, bookData.id);
+                                const uploadRes = await apiService.sendAction('uploadBookImage', {
+                                    id: bookData.id,
+                                    fileName: uploadPayload.fileName,
+                                    mimeType: uploadPayload.mimeType,
+                                    imageData: uploadPayload.imageData,
+                                    oldDriveId: book?.imageDriveId || ''
+                                });
+                                if (!uploadRes || uploadRes.status !== 'success') throw new Error(uploadRes?.message || 'Upload cover gagal.');
+                                bookData.imageUrl = uploadRes.imageUrl || '';
+                                bookData.imageDriveId = uploadRes.imageDriveId || '';
+                            } catch (imageErr) {
+                                console.warn('Cover upload belum tersedia:', imageErr);
+                                if (statusEl) statusEl.innerText = 'Cover belum terunggah. Data buku tetap akan disimpan.';
+                                showToast('Cover belum tersimpan di server. Pastikan Apps Script V13 sudah dideploy. Data buku tetap dilanjutkan.', 'info');
+                            }
+                        } else if (removeRequested && bookData.imageDriveId) {
+                            try {
+                                const delImage = await apiService.sendAction('deleteBookImage', { driveId: bookData.imageDriveId });
+                                if (!delImage || delImage.status !== 'success') throw new Error(delImage?.message || 'Gagal menghapus cover.');
+                                bookData.imageUrl = '';
+                                bookData.imageDriveId = '';
+                            } catch (imageErr) {
+                                console.warn('Delete cover belum tersedia:', imageErr);
+                                showToast('Cover lama dipertahankan karena server gambar belum aktif.', 'info');
+                            }
+                        }
+
+                        if (isEdit) {
+                            const idx = mockBooks.findIndex(b => b.id === bookId);
+                            if (idx >= 0) mockBooks[idx] = bookData;
+                        } else {
+                            mockBooks.push(bookData);
+                        }
+                        this.saveLocalStorage();
+                        app.navigate('books');
+                        showToast('Menyimpan data buku ke Google Sheets...', 'info');
+                        const saveRes = await apiService.sendAction('saveBook', bookData);
+                        if (saveRes?.status !== 'success') throw new Error(saveRes?.message || 'Data buku gagal disimpan.');
+                        showToast('Data buku & cover berhasil tersimpan!', 'success');
+                    } catch (err) {
+                        console.error('Save book error:', err);
+                        showToast('Data buku belum lengkap tersimpan: ' + String(err.message || err), 'error');
+                    } finally {
+                        window.__ykbutPendingBookImageFile = null;
+                        window.__ykbutRemoveBookImage = false;
                     }
-
-                    this.saveLocalStorage();
-                    app.navigate('books');
-                    showToast('Menyimpan ke Google Sheets...', 'info');
-
-                    await apiService.sendAction('saveBook', bookData);
-                    showToast('Data buku tersimpan di Google Sheets!', 'success');
                 });
+            },
+
+            async readAndCompressBookImage(file, bookId) {
+                const maxWidth = 900;
+                const maxHeight = 1200;
+                const quality = 0.82;
+                const imageData = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onerror = () => reject(new Error('Gagal membaca file gambar.'));
+                    reader.onload = () => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const ratio = Math.min(1, maxWidth / img.width, maxHeight / img.height);
+                            const canvas = document.createElement('canvas');
+                            canvas.width = Math.max(1, Math.round(img.width * ratio));
+                            canvas.height = Math.max(1, Math.round(img.height * ratio));
+                            const ctx = canvas.getContext('2d');
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            resolve(canvas.toDataURL('image/jpeg', quality));
+                        };
+                        img.onerror = () => reject(new Error('Format gambar tidak dapat diproses.'));
+                        img.src = reader.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+                return {
+                    imageData,
+                    mimeType: 'image/jpeg',
+                    fileName: `BOOK_${String(bookId || 'BOOK').replace(/[^A-Za-z0-9_-]/g,'_')}_${Date.now()}.jpg`
+                };
             },
 
             renderUsers(container) {
@@ -4112,7 +4701,7 @@
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
                 const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
-// Versi: V12 Server-Authoritative Sync + Unique ORD IDs + Shipping Update + Status Edit Persistence + Integrity Fingerprint + Orders/Customer/Loyalty + Excel Import Merge
+// Versi: V13 Server-Authoritative + Unique ORD IDs + Status Edit Persistence + Book Cover Upload + Visual Catalog
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -4128,22 +4717,22 @@ function handleRequest(e) {
     }
     var result = {};
     if (action === 'ping') {
-      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), serverVersion:'YKBUT-PRESS-SERVER-V12' };
+      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), serverVersion:'YKBUT-PRESS-SERVER-V13' };
     } else if (action === 'diagnose') {
-      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      ensureOrdersSchema(ss); ensureBooksSchema(ss); ensureSettingsSchema(ss);
       var diagSheet = ss.getSheetByName('Orders');
       var repairDiag = repairDuplicateOrderIds(diagSheet);
       var diagHeaders = diagSheet ? diagSheet.getRange(1,1,1,diagSheet.getLastColumn()).getValues()[0].map(function(h){return String(h).trim();}) : [];
-      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings'), serverVersion:'YKBUT-PRESS-SERVER-V12', ordersCount:diagSheet ? Math.max(0, diagSheet.getLastRow()-1) : 0, duplicateOrderIds:repairDiag.duplicatesFound, repairedOrderIds:repairDiag.repairedCount };
+      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings'), serverVersion:'YKBUT-PRESS-SERVER-V13', ordersCount:diagSheet ? Math.max(0, diagSheet.getLastRow()-1) : 0, duplicateOrderIds:repairDiag.duplicatesFound, repairedOrderIds:repairDiag.repairedCount };
     } else if (action === 'getAllData') {
-      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      ensureOrdersSchema(ss); ensureBooksSchema(ss); ensureSettingsSchema(ss);
       var orderRepair = repairDuplicateOrderIds(ss.getSheetByName('Orders'));
       var ordersSnapshot = getSheetData(ss,'Orders');
       var booksSnapshot = getSheetData(ss,'Books');
       var usersSnapshot = getSheetData(ss,'Users');
       result = {
         status:'success',
-        serverVersion:'YKBUT-PRESS-SERVER-V12',
+        serverVersion:'YKBUT-PRESS-SERVER-V13',
         serverGeneratedAt:new Date().toISOString(),
         orders:ordersSnapshot,
         ordersCount:ordersSnapshot.length,
@@ -4157,7 +4746,7 @@ function handleRequest(e) {
         settings:getSettings(ss)
       };
     } else if (action === 'setupOrders') {
-      ensureOrdersSchema(ss); ensureSettingsSchema(ss);
+      ensureOrdersSchema(ss); ensureBooksSchema(ss); ensureSettingsSchema(ss);
       result = { status:'success', message:'Struktur Orders dan Settings berhasil diperbarui.' };
     } else if (action === 'saveSettings') {
       ensureSettingsSchema(ss); saveSettings(ss, postData || {});
@@ -4274,9 +4863,33 @@ function handleRequest(e) {
       result = { status:'success', repairedCount:repairResult.repairedCount, duplicatesFound:repairResult.duplicatesFound, mappings:repairResult.mappings, message:repairResult.repairedCount ? 'ID transaksi duplikat berhasil diperbaiki.' : 'Tidak ada ID transaksi duplikat.' };
     } else if (action === 'deleteOrder') {
       deleteRowById(ss,'Orders',postData.id); result = {status:'success'};
+    } else if (action === 'uploadBookImage') {
+      ensureBooksSchema(ss);
+      var img = postData || {};
+      if (!img.id || !img.imageData) throw new Error('ID buku atau data gambar tidak ditemukan.');
+      var driveResult = saveBookCoverToDrive_(img.id, img.fileName, img.mimeType, img.imageData, img.oldDriveId);
+      result = { status:'success', imageUrl:driveResult.imageUrl, imageDriveId:driveResult.imageDriveId, publicAccess:driveResult.publicAccess, message:'Cover buku berhasil diunggah.' };
+    } else if (action === 'deleteBookImage') {
+      var driveId = String((postData || {}).driveId || '').trim();
+      if (driveId) trashDriveFile_(driveId);
+      result = { status:'success', message:'Cover buku berhasil dihapus.' };
     } else if (action === 'saveBook') {
-      upsertRowDynamic(ss.getSheetByName('Books'),'id',postData.id,postData); result = {status:'success'};
+      ensureBooksSchema(ss);
+      upsertRowDynamic(ss.getSheetByName('Books'),'id',postData.id,postData);
+      SpreadsheetApp.flush();
+      result = {status:'success', book:getRowObjectById(ss.getSheetByName('Books'), postData.id)};
+    } else if (action === 'deleteBooksBatch') {
+      ensureBooksSchema(ss);
+      var batchIds = (postData && Array.isArray(postData.ids)) ? postData.ids : [];
+      var bookSheetBatch = ss.getSheetByName('Books');
+      batchIds.forEach(function(bookId){ var bookRow = getRowObjectById(bookSheetBatch, bookId); if (bookRow && bookRow.imageDriveId) trashDriveFile_(bookRow.imageDriveId); });
+      batchIds.forEach(function(bookId){ deleteRowById(ss,'Books',bookId); });
+      SpreadsheetApp.flush();
+      result = {status:'success', deleted:batchIds.length};
     } else if (action === 'deleteBook') {
+      ensureBooksSchema(ss);
+      var deleteBook = getRowObjectById(ss.getSheetByName('Books'), postData.id);
+      if (deleteBook && deleteBook.imageDriveId) trashDriveFile_(deleteBook.imageDriveId);
       deleteRowById(ss,'Books',postData.id); result = {status:'success'};
     } else if (action === 'saveUser') {
       upsertRowDynamic(ss.getSheetByName('Users'),'id',postData.id,postData); result = {status:'success'};
@@ -4493,6 +5106,52 @@ function ensureOrdersSchema(ss) {
   if(finalDateIndex!==-1 && sheet.getLastRow()>1) sheet.getRange(2,finalDateIndex+1,sheet.getLastRow()-1,1).setNumberFormat('yyyy-mm-dd');
 }
 
+function ensureBooksSchema(ss) {
+  var sheet = ss.getSheetByName('Books');
+  var requiredHeaders = ['id','title','author','pages','category','costPrice','defaultPrice','margin','stock','imageUrl','imageDriveId'];
+  if (!sheet) { sheet=ss.insertSheet('Books'); sheet.appendRow(requiredHeaders); return; }
+  var data=sheet.getDataRange().getValues();
+  if(data.length===0 || data[0].length===0){ sheet.clear(); sheet.appendRow(requiredHeaders); return; }
+  var headers=data[0].map(function(h){return String(h).trim();});
+  requiredHeaders.forEach(function(header){ if(headers.indexOf(header)===-1){ sheet.getRange(1,sheet.getLastColumn()+1).setValue(header); headers.push(header); } });
+}
+function getRowObjectById(sheet, id) {
+  if (!sheet || sheet.getLastRow() <= 1) return null;
+  var data=sheet.getDataRange().getValues();
+  var headers=data[0].map(function(h){return String(h).trim();});
+  var idx=headers.indexOf('id'); if(idx===-1) return null;
+  var target=String(id||'').trim();
+  for(var r=1;r<data.length;r++){
+    if(String(data[r][idx]||'').trim()===target){
+      var out={}; headers.forEach(function(h,c){ var v=data[r][c]; if(v instanceof Date) v=Utilities.formatDate(v, sheet.getParent().getSpreadsheetTimeZone(),'yyyy-MM-dd'); out[h]=v; }); return out;
+    }
+  }
+  return null;
+}
+function getOrCreateBookImageFolder_() {
+  var props=PropertiesService.getScriptProperties();
+  var folderId=props.getProperty('YKBUT_BOOK_IMAGE_FOLDER_ID');
+  if(folderId){ try { return DriveApp.getFolderById(folderId); } catch(e) {} }
+  var it=DriveApp.getFoldersByName('YKBUT Press Book Images');
+  var folder=it.hasNext()?it.next():DriveApp.createFolder('YKBUT Press Book Images');
+  props.setProperty('YKBUT_BOOK_IMAGE_FOLDER_ID', folder.getId());
+  return folder;
+}
+function saveBookCoverToDrive_(bookId, fileName, mimeType, dataUrl, oldDriveId) {
+  var match=String(dataUrl||'').match(/^data:[^;]+;base64,(.*)$/);
+  if(!match) throw new Error('Format data gambar tidak valid.');
+  var bytes=Utilities.base64Decode(match[1]);
+  var folder=getOrCreateBookImageFolder_();
+  var safeName=String(fileName||('BOOK_'+bookId+'_'+Date.now()+'.jpg')).replace(/[^A-Za-z0-9._-]/g,'_');
+  var blob=Utilities.newBlob(bytes, mimeType || 'image/jpeg', safeName);
+  var file=folder.createFile(blob);
+  var publicAccess=true;
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) { publicAccess=false; }
+  if(oldDriveId && String(oldDriveId)!==String(file.getId())) trashDriveFile_(oldDriveId);
+  return { imageDriveId:file.getId(), imageUrl:'https://drive.google.com/thumbnail?id='+encodeURIComponent(file.getId())+'&sz=w900', publicAccess:publicAccess };
+}
+function trashDriveFile_(fileId){ try { DriveApp.getFileById(String(fileId)).setTrashed(true); } catch(e) {} }
+
 function ensureSettingsSchema(ss){
   var sheet=ss.getSheetByName('Settings');
   if(!sheet){sheet=ss.insertSheet('Settings');sheet.appendRow(['key','value']);}
@@ -4633,5 +5292,40 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
             app.init();
         });
     </script>
+
+<script>
+(() => {
+    function createRipple(target, event) {
+        if (!target || target.closest('#print-area')) return;
+        if (!target.matches('button, [onclick], .v25-card, a')) return;
+        const rect = target.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        if (getComputedStyle(target).position === 'static') target.style.position = 'relative';
+        if (getComputedStyle(target).overflow === 'visible') target.style.overflow = 'hidden';
+        const ripple = document.createElement('span');
+        ripple.className = 'v26-click-ripple';
+        const x = Math.max(8, Math.min(rect.width - 8, event.clientX - rect.left));
+        const y = Math.max(8, Math.min(rect.height - 8, event.clientY - rect.top));
+        ripple.style.left = `${x}px`;
+        ripple.style.top = `${y}px`;
+        target.appendChild(ripple);
+        target.classList.remove('v26-click-glow');
+        void target.offsetWidth;
+        target.classList.add('v26-click-glow');
+        setTimeout(() => ripple.remove(), 680);
+        setTimeout(() => target.classList.remove('v26-click-glow'), 360);
+    }
+
+    document.addEventListener('click', (event) => {
+        const target = event.target.closest('button, [onclick], .v25-card, a');
+        if (!target) return;
+        createRipple(target, event);
+    }, { passive: true });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.body.classList.add('v26-ready');
+    });
+})();
+</script>
 </body>
 </html>
