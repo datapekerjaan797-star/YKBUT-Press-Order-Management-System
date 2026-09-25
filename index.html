@@ -545,7 +545,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -580,7 +580,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -685,8 +685,8 @@
             return storedUrl;
         }
 
-        const SYNC_ENGINE_VERSION = 'V20_SERVER_AUTHORITATIVE_NO_STALE_TOMBSTONES';
-        const SERVER_EXPECTED_VERSION = 'YKBUT-PRESS-SERVER-V11';
+        const SYNC_ENGINE_VERSION = 'V23_SERVER_AUTHORITATIVE_STATUS_EDIT_VERIFY';
+        const SERVER_EXPECTED_VERSION = 'YKBUT-PRESS-SERVER-V12';
         const FINGERPRINT_EXCLUDED_KEYS = new Set(['isNewOrder','isNewCustomer','pendingDisplayNo','localChangedAt']);
 
         const canonicalizeOrderForFingerprint = (order) => {
@@ -970,6 +970,25 @@
                 const found = Array.isArray(data.orders) ? data.orders.find(o => String(o.id) === String(orderId)) : null;
                 const actual = found && found.date != null ? String(found.date).trim().slice(0,10) : '';
                 return { ok:actual === String(expectedDate || '').trim().slice(0,10), actual, expected:expectedDate };
+            } catch(error) { return { ok:false, reason:'exception', error }; }
+        }
+
+        async function verifyOrderStateOnServer(orderId, expectedOrder) {
+            try {
+                const data = await apiService.fetchAll();
+                if (!data || data.status !== 'success') return { ok:false, reason:'connection', data };
+                const found = Array.isArray(data.orders) ? data.orders.find(o => String(o.id) === String(orderId)) : null;
+                if (!found) return { ok:false, reason:'not_found' };
+                const norm = (v) => String(v == null ? '' : v).trim();
+                const checks = {
+                    status: norm(found.status) === norm(expectedOrder.status),
+                    paymentStatus: norm(found.paymentStatus) === norm(expectedOrder.paymentStatus),
+                    date: norm(found.date).slice(0,10) === norm(expectedOrder.date).slice(0,10),
+                    shippingVendor: norm(found.shippingVendor) === norm(expectedOrder.shippingVendor),
+                    trackingNumber: norm(found.trackingNumber) === norm(expectedOrder.trackingNumber)
+                };
+                const ok = Object.values(checks).every(Boolean);
+                return { ok, checks, found };
             } catch(error) { return { ok:false, reason:'exception', error }; }
         }
 
@@ -2994,20 +3013,27 @@
                 showToast('Mengirim update ke Google Sheets...', 'info');
                 const res = await apiService.sendAction('saveOrder', order);
                 if(res && res.status === 'success') {
-                    delete pendingOrderSync[String(order.id)];
-                    this.saveLocalStorage();
-                    const verify = await verifyOrderDateOnServer(order.id, order.date);
+                    const saved = res.order || {};
+                    Object.keys(saved).forEach(k => { if (saved[k] !== undefined) order[k] = saved[k]; });
+                    // Jangan hapus pending hanya karena server mengembalikan status success.
+                    // V12 juga memverifikasi ulang state aktual di Sheets agar perubahan status
+                    // benar-benar tersimpan sebelum queue lokal dibuang.
+                    const verify = await verifyOrderStateOnServer(order.id, order);
                     if (verify.ok) {
-                        showToast('Perubahan & tanggal pemesanan berhasil tersimpan di Google Sheets!', 'success');
+                        delete pendingOrderSync[String(order.id)];
+                        this.saveLocalStorage();
+                        showToast('Perubahan status berhasil tersimpan di Google Sheets!', 'success');
                     } else {
-                        const diag = await apiService.diagnose();
-                        console.error('Verifikasi tanggal gagal:', { verify, diag });
-                        if (diag?.status === 'success' && !diag.hasDateColumn) showToast('Kolom date belum tersedia pada deployment aktif.', 'error');
-                        else if (diag?.status === 'success' && diag.spreadsheetId !== SPREADSHEET_CONFIG.TARGET_SHEET_ID) showToast('Web App terhubung ke Spreadsheet yang berbeda.', 'error');
-                        else showToast('Tanggal belum terbaca kembali dari Google Sheets. Periksa deployment Web App.', 'error');
+                        // Tetap antrekan agar retry otomatis 60 detik tetap berjalan.
+                        pendingOrderSync[String(order.id)] = { ...order };
+                        this.saveLocalStorage();
+                        console.error('Verifikasi perubahan status gagal:', verify);
+                        showToast('Perubahan tampil di aplikasi, tetapi belum terverifikasi di Google Sheets. Sistem akan mencoba menyimpan ulang otomatis.', 'error');
                     }
                 } else {
-                    showToast('Google Sheets menolak penyimpanan: ' + (res?.message || 'deployment belum siap'), 'error');
+                    // Queue tetap ada sehingga retry 60 detik akan mengirim ulang.
+                    this.saveLocalStorage();
+                    showToast('Google Sheets menolak penyimpanan. Perubahan tetap masuk antrean sync: ' + (res?.message || 'deployment belum siap'), 'error');
                 }
             },
 
@@ -4073,7 +4099,7 @@
                 const currentUrl = getWebAppUrl();
                 // KODE APPS SCRIPT YANG DIUPGRADE (Membaca header dinamis)
                 const appsScriptCode = `// KODE GOOGLE APPS SCRIPT YKBUT PRESS
-// Versi: V11 Server-Authoritative Sync + Unique ORD IDs + Shipping Update + Integrity Fingerprint + Orders/Customer/Loyalty + Excel Import Merge
+// Versi: V12 Server-Authoritative Sync + Unique ORD IDs + Shipping Update + Status Edit Persistence + Integrity Fingerprint + Orders/Customer/Loyalty + Excel Import Merge
 function doGet(e) { return handleRequest(e); }
 function doPost(e) { return handleRequest(e); }
 
@@ -4089,13 +4115,13 @@ function handleRequest(e) {
     }
     var result = {};
     if (action === 'ping') {
-      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), serverVersion:'YKBUT-PRESS-SERVER-V11' };
+      result = { status:'success', message:'Koneksi Berhasil!', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), serverVersion:'YKBUT-PRESS-SERVER-V12' };
     } else if (action === 'diagnose') {
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       var diagSheet = ss.getSheetByName('Orders');
       var repairDiag = repairDuplicateOrderIds(diagSheet);
       var diagHeaders = diagSheet ? diagSheet.getRange(1,1,1,diagSheet.getLastColumn()).getValues()[0].map(function(h){return String(h).trim();}) : [];
-      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings'), serverVersion:'YKBUT-PRESS-SERVER-V11', ordersCount:diagSheet ? Math.max(0, diagSheet.getLastRow()-1) : 0, duplicateOrderIds:repairDiag.duplicatesFound, repairedOrderIds:repairDiag.repairedCount };
+      result = { status:'success', spreadsheetId:ss.getId(), spreadsheetName:ss.getName(), ordersSheet:!!diagSheet, headers:diagHeaders, hasDateColumn:diagHeaders.indexOf('date') !== -1, settingsSheet:!!ss.getSheetByName('Settings'), serverVersion:'YKBUT-PRESS-SERVER-V12', ordersCount:diagSheet ? Math.max(0, diagSheet.getLastRow()-1) : 0, duplicateOrderIds:repairDiag.duplicatesFound, repairedOrderIds:repairDiag.repairedCount };
     } else if (action === 'getAllData') {
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
       var orderRepair = repairDuplicateOrderIds(ss.getSheetByName('Orders'));
@@ -4104,7 +4130,7 @@ function handleRequest(e) {
       var usersSnapshot = getSheetData(ss,'Users');
       result = {
         status:'success',
-        serverVersion:'YKBUT-PRESS-SERVER-V11',
+        serverVersion:'YKBUT-PRESS-SERVER-V12',
         serverGeneratedAt:new Date().toISOString(),
         orders:ordersSnapshot,
         ordersCount:ordersSnapshot.length,
@@ -4130,29 +4156,57 @@ function handleRequest(e) {
     } else if (action === 'saveOrder') {
       if (!postData) throw new Error('Data pesanan tidak ditemukan.');
       ensureOrdersSchema(ss); ensureSettingsSchema(ss);
-      repairDuplicateOrderIds(ss.getSheetByName('Orders'));
       var orderSheet = ss.getSheetByName('Orders');
+      repairDuplicateOrderIds(orderSheet);
       if (postData.date !== undefined && postData.date !== null && String(postData.date).trim() !== '') postData.date = String(postData.date).trim();
 
-      // Idempotency: retry dari browser dengan clientRequestId yang sama harus
-      // mengembalikan transaksi yang sama, bukan membuat transaksi kedua.
+      // V12 FIX: clientRequestId hanya digunakan sebagai idempotency key untuk
+      // transaksi BARU. Untuk EDIT existing order, jangan pernah short-circuit hanya
+      // karena clientRequestId sama. Versi sebelumnya mengembalikan "success" tanpa
+      // menulis perubahan status ke Sheets, sehingga browser tampil berubah sementara
+      // lalu kembali ke nilai lama ketika sync berikutnya membaca server.
+      var existingById = postData.id ? getOrderById(orderSheet, String(postData.id).trim().toUpperCase()) : null;
       var existingByRequest = findOrderByClientRequestId(orderSheet, postData.clientRequestId);
-      if (existingByRequest) {
-        result = { status:'success', id:existingByRequest.id, date:existingByRequest.date || '', customerId:existingByRequest.customerId || '' };
-      } else {
-        // Order BARU selalu mendapat ID dari server. ID sementara browser tidak pernah
-        // dipakai sebagai ID permanen, sehingga tidak ada collision antar perangkat.
-        if (postData.isNewOrder === true) {
+      var isExplicitNewOrder = postData.isNewOrder === true;
+
+      if (isExplicitNewOrder) {
+        if (existingByRequest) {
+          var existingNew = getOrderById(orderSheet, existingByRequest.id) || existingByRequest;
+          result = { status:'success', id:existingNew.id, date:existingNew.date || '', customerId:existingNew.customerId || '', order:existingNew, idempotent:true };
+        } else {
+          // Order BARU selalu mendapat ID dari server. ID sementara browser tidak pernah
+          // dipakai sebagai ID permanen, sehingga tidak ada collision antar perangkat.
           postData.id = reserveNextOrderId(orderSheet);
+          if (postData.isNewCustomer === true || !postData.customerId) {
+            postData.customerId = reserveNextCustomerId(orderSheet);
+          }
+          postData.customerId = String(postData.customerId).trim().toUpperCase();
+          validateCustomerIdConsistency(orderSheet, postData);
+          upsertRowDynamic(orderSheet,'id',postData.id,postData);
+          SpreadsheetApp.flush();
+          var savedNew = getOrderById(orderSheet, postData.id) || postData;
+          result = { status:'success', id:postData.id, date:postData.date || '', customerId:postData.customerId, order:savedNew, idempotent:false };
         }
-        if (postData.isNewCustomer === true || !postData.customerId) {
-          postData.customerId = reserveNextCustomerId(orderSheet);
+      } else {
+        // EDIT EXISTING: cari berdasarkan ID dan tulis perubahan ke baris yang sama.
+        // clientRequestId lama boleh tetap dikirim dari browser, tetapi tidak boleh
+        // menghalangi update status/tanggal/resi/pembayaran.
+        if (!existingById) {
+          throw new Error('ID transaksi tidak ditemukan di Google Sheets: ' + (postData.id || '-'));
         }
-        postData.customerId = String(postData.customerId).trim().toUpperCase();
-        validateCustomerIdConsistency(orderSheet, postData);
+        postData.id = String(existingById.id).trim().toUpperCase();
+        if (postData.customerId) {
+          postData.customerId = String(postData.customerId).trim().toUpperCase();
+          validateCustomerIdConsistency(orderSheet, postData);
+        } else if (existingById.customerId) {
+          postData.customerId = String(existingById.customerId).trim().toUpperCase();
+        }
+        // Jangan menghapus field lama yang tidak dikirim oleh client.
         upsertRowDynamic(orderSheet,'id',postData.id,postData);
         SpreadsheetApp.flush();
-        result = { status:'success', id:postData.id, date:postData.date || '', customerId:postData.customerId };
+        var savedEdit = getOrderById(orderSheet, postData.id);
+        if (!savedEdit) throw new Error('Perubahan tidak dapat diverifikasi setelah penyimpanan.');
+        result = { status:'success', id:postData.id, date:savedEdit.date || '', customerId:savedEdit.customerId || '', order:savedEdit, updated:true };
       }
     } else if (action === 'updateShippingCost') {
       if (!postData || !postData.id) throw new Error('ID transaksi tidak ditemukan.');
@@ -4489,62 +4543,8 @@ function upsertRowDynamic(sheet,keyColumnName,keyValue,rowValuesObj){
 }
 
 function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);if(sheet){var data=sheet.getDataRange().getValues();if(data.length<2)return;var headers=data[0];var keyIndex=headers.indexOf('id');if(keyIndex===-1)return;for(var i=data.length-1;i>=1;i--){if(String(data[i][keyIndex])===String(id))sheet.deleteRow(i+1);}}}
-`
 
-                const modalHtml = `
-                    <div id="sheet-config-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4 fade-in">
-                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-                            <div class="p-4 border-b border-gray-200 bg-gray-900 text-white flex justify-between items-center">
-                                <h3 class="font-bold text-lg flex items-center text-corp-primary"><i class="ph ph-file-spreadsheet text-2xl mr-2 text-blue-400"></i> Integrasi Google Spreadsheet YKBUT</h3>
-                                <button onclick="app.closeModal()" class="text-gray-400 hover:text-white transition"><i class="ph ph-x text-xl"></i></button>
-                            </div>
-                            <div class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700">
-                                <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg flex items-center justify-between">
-                                    <div>
-                                        <p class="text-xs text-blue-700 font-bold uppercase tracking-wider">Target Spreadsheet ID</p>
-                                        <p class="font-mono text-gray-800 font-bold">${SPREADSHEET_CONFIG.TARGET_SHEET_ID}</p>
-                                    </div>
-                                    <a href="https://docs.google.com/spreadsheets/d/${SPREADSHEET_CONFIG.TARGET_SHEET_ID}/edit" target="_blank" rel="noopener" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition flex items-center text-xs">
-                                        <i class="ph ph-arrow-square-out mr-1"></i> Buka Spreadsheet
-                                    </a>
-                                </div>
-
-                                <div class="bg-gray-50 border p-4 rounded-lg">
-                                    <label class="block font-bold text-gray-800 mb-1">Google Apps Script Web App URL *</label>
-                                    <p class="text-xs text-gray-500 mb-3">Tempelkan Web App URL yang Anda dapatkan setelah melakukan <strong>Deploy</strong> pada Google Spreadsheet Anda.</p>
-                                    <div class="flex space-x-2">
-                                        <input type="text" id="input-webapp-url" value="${currentUrl}" placeholder="https://script.google.com/macros/s/.../exec" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-corp-primary outline-none font-mono text-xs">
-                                        <button onclick="app.saveWebAppUrl()" class="px-4 py-2 bg-corp-primary text-white font-bold rounded-lg hover:bg-blue-800 transition">Simpan & Uji Koneksi</button>
-                                         <button onclick="app.runSheetDiagnostic()" class="px-3 py-2 bg-white text-gray-700 border border-gray-300 font-semibold rounded-lg hover:bg-gray-100 transition text-xs">Diagnosa</button>
-                                    </div>
-                                    <div id="diagnostic-result" class="mt-3 hidden p-3 rounded-lg text-xs font-mono"></div>
-                                </div>
-
-                                <div class="border-t pt-4 space-y-3">
-                                    <h4 class="font-bold text-gray-800 text-base flex items-center"><i class="ph ph-list-numbers text-xl mr-2 text-corp-primary"></i> Panduan Hubungkan Ke Spreadsheet Anda (5 Langkah):</h4>
-                                    <ol class="list-decimal pl-5 space-y-2 text-xs text-gray-600 leading-relaxed">
-                                        <li>Buka Google Spreadsheet Anda di atas, pilih menu <strong>Ekstensi (Extensions) &gt; Apps Script</strong>.</li>
-                                        <li>Hapus kode bawaan di Apps Script, lalu <strong>salin dan tempelkan (paste) Kode Apps Script</strong> dari kotak di bawah ini. <span class="text-red-500 italic">*Kode ini sudah di-upgrade agar lebih kebal error.</span></li>
-                                        <li>Klik ikon <strong>Disket (Simpan)</strong> di Apps Script.</li>
-                                        <li>Buka <strong>Deploy &gt; Manage deployments</strong>. Pilih deployment Web App yang sedang dipakai, klik <strong>Edit</strong>, lalu pilih <strong>New version</strong>. Jika belum ada deployment Web App, buat deployment baru:
-                                            <ul class="list-disc pl-4 mt-1 space-y-1 font-semibold text-gray-700">
-                                                <li>Pilih jenis (Type): <span class="text-blue-600">Web App</span></li>
-                                                <li>Execute as (Jalankan sebagai): <span class="text-blue-600">Me (Saya)</span></li>
-                                                <li>Who has access (Akses): <span class="text-red-600 font-bold">Anyone (Siapa saja)</span></li>
-                                            </ul>
-                                        </li>
-                                        <li>Klik <strong>Deploy</strong>, lalu salin <strong>Web App URL</strong> yang dihasilkan dan tempelkan di kotak isian di atas.</li>
-                                        <li><strong>Pastikan Server Engine V10 terdeteksi</strong> pada menu Diagnosa. V18 menggunakan Google Sheets sebagai sumber data utama; LocalStorage hanya menjadi cache/fallback dan transaksi pending.</li>
-                                    </ol>
-                                </div>
-                                <div class="mt-4">
-                                    <label class="block font-bold text-gray-800 mb-1 text-sm">Kode Apps Script</label>
-                                    <textarea readonly class="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-xs font-mono outline-none resize-none focus:ring-2 focus:ring-corp-primary cursor-pointer" onclick="this.select()" title="Klik untuk menyeleksi seluruh kode">${appsScriptCode}</textarea>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+`;
                 document.getElementById('modal-root').innerHTML = modalHtml;
             },
 
@@ -4560,7 +4560,7 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                     const legacySyncReady = !data.serverVersion && Number.isFinite(Number(data.ordersCount));
                     const syncReady = data.serverVersion === SERVER_EXPECTED_VERSION || legacySyncReady;
                     resultDiv.className = (correct && syncReady) ? 'mt-3 p-3 rounded-lg text-xs font-mono bg-green-50 text-green-700 border border-green-200' : 'mt-3 p-3 rounded-lg text-xs font-mono bg-amber-50 text-amber-700 border border-amber-200';
-                    resultDiv.innerHTML = 'Deployment: <strong>' + ((correct && syncReady) ? 'VALID & SYNC READY' : 'PERLU DIPERBAIKI') + '</strong><br>Web App URL dipakai: ' + escapeHtml(getWebAppUrl()) + '<br>Server Version: ' + (data.serverVersion || 'Legacy V9') + '<br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + ' (' + (Number.isFinite(Number(data.ordersCount)) ? Number(data.ordersCount) : '?') + ' transaksi)<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Server Snapshot Engine: ' + (data.serverVersion === SERVER_EXPECTED_VERSION ? 'V11 fingerprint + unique ID guard' : (legacySyncReady ? 'Legacy metadata aman' : 'DEPLOYMENT LAMA/TIDAK LENGKAP')) + '<br>Header: ' + (data.headers || []).join(', ');
+                    resultDiv.innerHTML = 'Deployment: <strong>' + ((correct && syncReady) ? 'VALID & SYNC READY' : 'PERLU DIPERBAIKI') + '</strong><br>Web App URL dipakai: ' + escapeHtml(getWebAppUrl()) + '<br>Server Version: ' + (data.serverVersion || 'Legacy V9') + '<br>Spreadsheet ID: ' + (data.spreadsheetId || '-') + '<br>Orders: ' + (data.ordersSheet ? 'ada' : 'tidak ada') + ' (' + (Number.isFinite(Number(data.ordersCount)) ? Number(data.ordersCount) : '?') + ' transaksi)<br>Kolom date: ' + (data.hasDateColumn ? 'ada' : 'TIDAK ADA') + '<br>Server Snapshot Engine: ' + (data.serverVersion === SERVER_EXPECTED_VERSION ? 'V12 fingerprint + unique ID + edit persistence guard' : (legacySyncReady ? 'Legacy metadata aman' : 'DEPLOYMENT LAMA/TIDAK LENGKAP')) + '<br>Header: ' + (data.headers || []).join(', ');
                 } else {
                     resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono bg-red-50 text-red-700 border border-red-200';
                     resultDiv.innerHTML = '<i class="ph ph-x-circle mr-1"></i> ' + String(data?.message || 'Deployment tidak dapat diakses').replace(/</g,'&lt;');
@@ -4592,11 +4592,11 @@ function deleteRowById(ss,sheetName,id){var sheet=ss.getSheetByName(sheetName);i
                             if(data.status !== 'success') throw new Error(data.message || 'Deployment tidak mengembalikan status success');
                             if(data.spreadsheetId !== SPREADSHEET_CONFIG.TARGET_SHEET_ID) throw new Error('Web App mengarah ke Spreadsheet ID berbeda: ' + (data.spreadsheetId || '-'));
                             if(!data.ordersSheet || !data.hasDateColumn) throw new Error('Sheet Orders atau kolom date belum tersedia pada deployment aktif.');
-                            const isV11 = data.serverVersion === SERVER_EXPECTED_VERSION;
+                            const isV12 = data.serverVersion === SERVER_EXPECTED_VERSION;
                             const isLegacyReady = !data.serverVersion && Number.isFinite(Number(data.ordersCount));
-                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono ' + (isV11 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200');
-                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> ' + (isV11 ? 'Deployment V11 aktif & siap sinkronisasi authoritative dengan fingerprint + unique ID guard.' : (isLegacyReady ? 'Deployment legacy terdeteksi. Sinkronisasi authoritative tetap aman bila metadata lengkap. V11 direkomendasikan untuk unique ID guard + fingerprint.' : 'Deployment aktif, tetapi metadata snapshot belum lengkap. Gunakan Kode Apps Script V11 dari aplikasi.'));
-                            showToast(isV11 ? 'Koneksi + schema + fingerprint Google Sheets tervalidasi.' : (isLegacyReady ? 'Koneksi valid. Gunakan V11 untuk unique ID guard + integrity fingerprint.' : 'Deployment perlu diperbarui.'), isV11 ? 'success' : 'info');
+                            resultDiv.className = 'mt-3 p-3 rounded-lg text-xs font-mono ' + (isV12 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200');
+                            resultDiv.innerHTML = '<i class="ph ph-check-circle mr-1"></i> ' + (isV12 ? 'Deployment V12 aktif & siap sinkronisasi authoritative dengan status edit persistence + fingerprint + unique ID guard.' : (isLegacyReady ? 'Deployment legacy terdeteksi. Sinkronisasi authoritative tetap aman bila metadata lengkap. V12 direkomendasikan untuk penyimpanan perubahan status yang terverifikasi + unique ID guard + fingerprint.' : 'Deployment aktif, tetapi metadata snapshot belum lengkap. Gunakan Kode Apps Script V12 dari aplikasi.'));
+                            showToast(isV12 ? 'Koneksi + schema + fingerprint Google Sheets tervalidasi.' : (isLegacyReady ? 'Koneksi valid. Gunakan V11 untuk unique ID guard + integrity fingerprint.' : 'Deployment perlu diperbarui.'), isV12 ? 'success' : 'info');
                             this.syncFromSpreadsheet();
                         })
                         .catch(err => {
