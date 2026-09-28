@@ -920,7 +920,7 @@
                 <!-- TEMPAT LOGO UNTUK HALAMAN LOGIN -->
                 <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
                 <div class="flex justify-center mb-4">
-                    <img src="Logo YKBUT Press.png" alt="Logo YKBUT" class="h-16 w-auto object-contain">
+                    <img src="https://placehold.co/150x150/0F172A/FFFFFF?text=LOGO+HERE" alt="Logo YKBUT" class="h-16 w-auto object-contain">
                 </div>
                 <h1 class="text-3xl font-black text-gray-800 tracking-tight mb-1">YKBUT</h1>
                 <span class="text-sm text-corp-primary font-bold tracking-[0.2em] uppercase block">Press System</span>
@@ -955,7 +955,7 @@
         <div class="py-5 flex flex-col items-center justify-center border-b border-gray-800 px-4">
             <!-- TEMPAT LOGO UNTUK SIDEBAR MENU -->
             <!-- Nanti ganti atribut src di bawah dengan URL logo dari Github Anda -->
-            <img src="Logo YKBUT Press.png" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
+            <img src="https://placehold.co/150x150/1D4ED8/FFFFFF?text=LOGO" alt="Logo Sidebar" class="h-12 w-auto mb-3 object-contain rounded">
             <div class="text-center">
                 <h1 class="text-white font-black text-2xl tracking-wider leading-none">YKBUT</h1>
                 <span class="text-xs text-corp-primary font-bold tracking-[0.2em] uppercase mt-1 block">Press System</span>
@@ -2321,16 +2321,14 @@
                     monthlyOrderData.push({ label, value });
                 }
 
-                // Nilai transaksi berdasarkan status untuk pie/doughnut chart.
-                // Chart hanya menggunakan nilai rupiah, bukan jumlah pesanan.
-                const statusTransactionValue = [
+                // Jumlah transaksi berdasarkan status untuk pie/doughnut chart.
+                // Grafik status secara khusus menggunakan jumlah transaksi, bukan nilai rupiah.
+                const statusTransactionCount = [
                     ORDER_STATUS.NEW,
                     ORDER_STATUS.PROCESSED,
                     ORDER_STATUS.SHIPPING,
                     ORDER_STATUS.COMPLETED
-                ].map(status => dashboardOrders.reduce((sum, order) => {
-                    return sum + (order.status === status ? Number(order.totalPrice || 0) : 0);
-                }, 0));
+                ].map(status => dashboardOrders.filter(order => order.status === status).length);
 
                 const urlSet = !!getWebAppUrl();
 
@@ -2418,7 +2416,7 @@
                             <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex flex-col justify-between">
                                 <div>
                                     <h3 class="text-lg font-bold text-gray-800 mb-1">Update Status Transaksi</h3>
-                                    <p class="text-xs text-gray-500 mb-4">Distribusi tahapan pemrosesan pesanan saat ini.</p>
+                                    <p class="text-xs text-gray-500 mb-4">Jumlah transaksi pada setiap tahapan pemrosesan pesanan saat ini.</p>
                                 </div>
                                 <div class="chart-container">
                                     <canvas id="orderStatusChart"></canvas>
@@ -2483,7 +2481,7 @@
                                 maintainAspectRatio: false,
                                 plugins: {
                                     legend: { display: false },
-                                    tooltip: { callbacks: { label: (context) => ` ${formatRupiah(context.raw)}` } }
+                                    tooltip: { callbacks: { label: (context) => ` ${Number(context.raw || 0).toLocaleString('id-ID')} transaksi` } }
                                 },
                                 scales: {
                                     y: {
@@ -2507,7 +2505,8 @@
                             data: {
                                 labels: ['Pesanan Baru', 'Diproses', 'Pengiriman', 'Selesai'],
                                 datasets: [{
-                                    data: statusTransactionValue,
+                                    label: 'Jumlah Transaksi',
+                                    data: statusTransactionCount,
                                     backgroundColor: ['#1D4ED8', '#F59E0B', '#8B5CF6', '#10B981'],
                                     hoverOffset: 4,
                                     borderWidth: 0
@@ -3630,7 +3629,15 @@
                                     </div>
                                     <div class="md:col-span-2 bg-blue-50 border border-blue-100 rounded-lg p-3">
                                         <label class="block text-sm font-semibold text-gray-700 mb-1">Customer ID / Riwayat Customer</label>
-                                        <select id="customer-history-select" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-corp-primary outline-none">
+                                        <div class="relative mb-2">
+                                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                                            <input type="text" id="customer-search" autocomplete="off" placeholder="Cari ID, nama, atau nomor HP customer..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-corp-primary outline-none transition text-sm">
+                                        </div>
+                                        <div class="flex items-center justify-between gap-2 mb-1">
+                                            <span id="customer-search-count" class="text-[10px] text-gray-500">Memuat daftar customer...</span>
+                                            <button type="button" id="clear-customer-search" class="text-[10px] font-semibold text-corp-primary hover:underline hidden">Bersihkan pencarian</button>
+                                        </div>
+                                        <select id="customer-history-select" size="1" class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-corp-primary outline-none">
                                             <option value="">-- Customer Baru --</option>
                                             ${getCustomerProfiles().map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.id)} • ${escapeHtml(c.name)} • ${escapeHtml(c.phone || '-')}</option>`).join('')}
                                         </select>
@@ -3746,6 +3753,9 @@
                 const inputDp = document.getElementById('pay-dp');
 
                 const customerSelect = document.getElementById('customer-history-select');
+                const customerSearchInput = document.getElementById('customer-search');
+                const customerSearchCount = document.getElementById('customer-search-count');
+                const clearCustomerSearch = document.getElementById('clear-customer-search');
                 const customerIdInput = document.getElementById('cust-id');
                 const discountInput = document.getElementById('pay-discount-percent');
                 const pointsInput = document.getElementById('pay-points-used');
@@ -3797,6 +3807,49 @@
                 // Customer ID untuk customer baru selalu dibuat otomatis dan readonly.
                 // Untuk customer lama, ID mengikuti histori customer yang dipilih.
                 if (customerIdInput && !customerSelect?.value) customerIdInput.value = getNextCustomerId();
+
+                // Search customer: tetap menggunakan native select agar UI/UX lama tidak berubah,
+                // tetapi daftar customer dapat difilter berdasarkan ID, nama, HP, atau email.
+                const allCustomerProfiles = getCustomerProfiles();
+                const renderCustomerOptions = (keyword = '') => {
+                    if (!customerSelect) return;
+                    const query = String(keyword || '').trim().toLowerCase();
+                    const selectedId = String(customerSelect.value || '');
+                    const filtered = allCustomerProfiles.filter(c => {
+                        if (!query) return true;
+                        return [c.id, c.name, c.phone, c.email, c.address]
+                            .map(v => String(v || '').toLowerCase())
+                            .some(v => v.includes(query));
+                    });
+
+                    customerSelect.innerHTML = `<option value="">-- Customer Baru --</option>` + filtered.map(c =>
+                        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.id)} • ${escapeHtml(c.name)} • ${escapeHtml(c.phone || '-')}</option>`
+                    ).join('');
+
+                    if (selectedId && filtered.some(c => String(c.id) === selectedId)) {
+                        customerSelect.value = selectedId;
+                    } else if (selectedId) {
+                        customerSelect.value = '';
+                    }
+
+                    if (customerSearchCount) {
+                        customerSearchCount.innerText = query
+                            ? `${filtered.length} customer ditemukan dari ${allCustomerProfiles.length}`
+                            : `${allCustomerProfiles.length} customer tersedia`;
+                    }
+                    if (clearCustomerSearch) clearCustomerSearch.classList.toggle('hidden', !query);
+                };
+
+                renderCustomerOptions();
+                customerSearchInput?.addEventListener('input', e => renderCustomerOptions(e.target.value));
+                clearCustomerSearch?.addEventListener('click', () => {
+                    if (customerSearchInput) {
+                        customerSearchInput.value = '';
+                        customerSearchInput.focus();
+                    }
+                    renderCustomerOptions('');
+                });
+
                 customerSelect?.addEventListener('change', e => {
                     if (e.target.value) {
                         applyCustomer(e.target.value);
